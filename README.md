@@ -13,6 +13,19 @@ muestras históricas configurables, pensada sobre todo para el mercado **Over 0.
 
 La especificación completa está en [`docs/especificacion.md`](docs/especificacion.md).
 
+## Abrir la app en tu computadora (lo más fácil)
+
+1. Instalá **Python** desde https://www.python.org/downloads/ (en Windows marcá la casilla
+   **“Add python.exe to PATH”** en la primera pantalla del instalador).
+2. Instalá **Node.js** desde https://nodejs.org (botón **LTS**).
+3. Bajá este proyecto: botón verde **Code → Download ZIP** en GitHub, y descomprimilo.
+4. Doble clic en:
+   - Windows: **`iniciar-windows.bat`**
+   - Mac: **`iniciar-mac.command`** (la primera vez: clic derecho → **Abrir** → **Abrir**).
+
+La primera vez tarda unos minutos porque instala lo necesario. Después se abre el navegador
+en http://localhost:5173. Para cerrar la app, cerrá la ventana negra.
+
 ## Estructura
 
 ```
