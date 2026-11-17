@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import Settings from "./components/Settings";
 import { api, Catalog, LeagueNode, Meta, UserProfile } from "./api";
 import PrematchPage from "./pages/PrematchPage";
 import ProfilePage from "./pages/ProfilePage";
 
 type Tab = "prematch" | "profile";
 
-// Link a la acción de GitHub que actualiza los datos (lo completa la publicación automática).
-const UPDATE_URL = import.meta.env.VITE_UPDATE_URL as string | undefined;
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("prematch");
@@ -15,14 +14,24 @@ export default function App() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [version, setVersion] = useState(0); // cambia al cambiar de clave o de modo
 
   const reloadProfiles = useCallback(async () => setProfiles(await api.profiles()), []);
 
   useEffect(() => {
-    Promise.all([api.catalog(), api.leagues(), api.profiles(), api.meta()])
-      .then(([c, l, p, m]) => { setCatalog(c); setLeagues(l); setProfiles(p); setMeta(m); })
+    Promise.all([api.catalog(), api.profiles(), api.meta()])
+      .then(([c, p, m]) => { setCatalog(c); setProfiles(p); setMeta(m); })
       .catch((e) => setError(`No se pudieron cargar los datos: ${e.message}`));
-  }, []);
+  }, [version]);
+  // las ligas conocidas crecen a medida que se bajan datos
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const upd = () => { clearTimeout(t); t = setTimeout(() => api.leagues().then(setLeagues), 400); };
+    upd();
+    const off = api.onChange(upd);
+    return () => { off(); clearTimeout(t); };
+  }, [version]);
 
   const active = profiles.find((p) => p.is_active);
 
@@ -37,20 +46,20 @@ export default function App() {
         <div className="muted small">
           {active && <>Perfil activo: <b>{active.name}</b></>}
           {meta && (
-            <span className="tag" title={meta.leagues_synced?.join("\n")}>
-              {meta.provider === "api_football" ? "Datos reales (API-Football)" : "Datos de prueba"} · actualizados{" "}
-              {new Date(meta.generated_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            <span className="tag">
+              {meta.provider === "api_football" ? "Datos en vivo (API-Football)" : "Datos de prueba"}
             </span>
           )}
-          {UPDATE_URL && <a className="tag link-tag" href={UPDATE_URL} target="_blank" rel="noreferrer">↻ Actualizar datos</a>}
+          <button className="ghost settings-btn" onClick={() => setShowSettings(true)}>⚙ Ajustes</button>
         </div>
       </header>
       {error && <div className="error">{error}</div>}
       {catalog && profiles.length > 0 && (tab === "prematch" ? (
-        <PrematchPage catalog={catalog} leagues={leagues} profiles={profiles} />
+        <PrematchPage key={version} catalog={catalog} leagues={leagues} profiles={profiles} openSettings={() => setShowSettings(true)} />
       ) : (
         <ProfilePage catalog={catalog} leagues={leagues} profiles={profiles} reload={reloadProfiles} />
       ))}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} onChanged={() => setVersion((v) => v + 1)} />}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { CheckList, LeagueTree, Section } from "../components/common";
 import FiltersDialog, { countFilters } from "../components/FiltersDialog";
 import MarketPicker from "../components/MarketPicker";
 import { OddsModal, SampleModal } from "../components/MatchModals";
+import Flag from "../components/Flag";
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const shift = (d: string, n: number) => {
@@ -11,20 +12,11 @@ const shift = (d: string, n: number) => {
   x.setDate(x.getDate() + n);
   return x.toLocaleDateString("en-CA");
 };
-const SUBFLAGS: Record<string, string> = {
-  "GB-ENG": "🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
-  "GB-SCT": "🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
-  "GB-WLS": "🏴\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}",
-};
-const flag = (code: string | null) => {
-  if (!code) return "🌍";
-  if (SUBFLAGS[code.toUpperCase()]) return SUBFLAGS[code.toUpperCase()];
-  const c = code.slice(0, 2).toUpperCase();
-  return /^[A-Z]{2}$/.test(c) && c !== "EU" ? String.fromCodePoint(...[...c].map((x) => 127397 + x.charCodeAt(0))) : "🌍";
-};
 const fmt = (v: number | null | undefined, d = 2) => (v === null || v === undefined ? "—" : v.toFixed(d));
 
-export default function PrematchPage({ catalog, leagues: tree, profiles }: { catalog: Catalog; leagues: LeagueNode[]; profiles: UserProfile[] }) {
+export default function PrematchPage({ catalog, leagues: tree, profiles, openSettings }: {
+  catalog: Catalog; leagues: LeagueNode[]; profiles: UserProfile[]; openSettings: () => void;
+}) {
   const active = profiles.find((p) => p.is_active) ?? profiles[0];
   const [profileId, setProfileId] = useState<number>(active.id);
   const profile = profiles.find((p) => p.id === profileId) ?? active;
@@ -43,6 +35,15 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
   const [err, setErr] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false); // solo en celular
+  const [tick, setTick] = useState(0); // llegan datos nuevos (historiales, cuotas)
+  const [loadAll, setLoadAll] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const off = api.onChange(() => { clearTimeout(t); t = setTimeout(() => setTick((x) => x + 1), 500); });
+    return () => { off(); clearTimeout(t); };
+  }, []);
+  useEffect(() => setLoadAll(false), [date]);
   const [sampleRow, setSampleRow] = useState<Row | null>(null);
   const [oddsRow, setOddsRow] = useState<Row | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -63,13 +64,13 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
   useEffect(() => {
     setLoading(true);
     const t = setTimeout(() => {
-      api.prematch({ date, profile_id: profileId, leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters })
+      api.prematch({ date, profile_id: profileId, leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters, load_all: loadAll })
         .then((d) => { setData(d); setErr(""); })
         .catch((e) => setErr(e.message))
         .finally(() => setLoading(false));
     }, 150);
     return () => clearTimeout(t);
-  }, [date, profileId, leagues, markets, stats, streaks, bookmaker, hide, sort, filters]);
+  }, [date, profileId, leagues, markets, stats, streaks, bookmaker, hide, sort, filters, tick, loadAll]);
 
   const mName = useMemo(() => Object.fromEntries(catalog.markets.map((m) => [m.key, m.name])), [catalog]);
   const sName = useMemo(() => Object.fromEntries(catalog.stats.map((m) => [m.key, m.name])), [catalog]);
@@ -93,13 +94,19 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
         <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
         <button onClick={() => setDate(shift(date, 1))}>▶</button>
         <button className={date === today() ? "on" : ""} onClick={() => setDate(today())}>Hoy</button>
+        {data?.mode === "api" && (
+          <button title="Volver a pedir partidos y cuotas del día" disabled={refreshing}
+            onClick={async () => { setRefreshing(true); try { await api.refresh(date); } finally { setRefreshing(false); setTick((x) => x + 1); } }}>
+            {refreshing ? "Actualizando…" : "↻ Actualizar"}
+          </button>
+        )}
         <div className="chips">
           <span className={`chip ${!leagues.length ? "on" : ""}`} onClick={() => setLeagues([])}>Todos <b>{data?.total ?? 0}</b></span>
           <span className={`chip ${profile.fav_leagues.length && sameSet(leagues, profile.fav_leagues) ? "on" : ""}`}
             onClick={() => setLeagues(profile.fav_leagues)}>★ Favoritos <b>{data?.favorites_count ?? 0}</b></span>
           {data?.countries.map((c) => (
             <span key={c.country} className={`chip ${sameSet(leagues, c.league_ids) ? "on" : ""}`} onClick={() => setLeagues(c.league_ids)}>
-              {flag(c.code)} {c.country} <b>{c.count}</b>
+              <Flag flag={c.flag} /> {c.country} <b>{c.count}</b>
             </span>
           ))}
         </div>
@@ -169,9 +176,23 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
           <div className="summary">
             {data && <>Mostrando <b>{data.shown}</b> partidos en <b>{data.shown_leagues}</b> ligas (de un total de {data.total} partidos en {data.total_leagues} ligas)</>}
             {loading && <span className="muted"> · calculando…</span>}
+            {!!data?.loading && <span className="muted"> · bajando datos de API-Football ({data.loading})…</span>}
             {data && <span className="muted"> · perfil {data.profile.name}</span>}
           </div>
           {err && <div className="error">{err}</div>}
+          {data?.errors?.map((e) => <div key={e} className="error">API-Football: {e}</div>)}
+          {data?.mode === "demo" && (
+            <div className="notice">
+              Estás viendo <b>datos de prueba</b>. Para ver los partidos reales de cada día, cargá tu clave de API-Football en{" "}
+              <button className="link" onClick={openSettings}>⚙ Ajustes</button>.
+            </div>
+          )}
+          {!!data?.pending_leagues && (
+            <div className="notice">
+              Hay <b>{data.pending_leagues}</b> ligas sin historial todavía. Elegí las ligas que te interesan (chips de países o panel de Ligas)
+              o <button className="link" onClick={() => setLoadAll(true)}>calculá todas</button> (≈{data.pending_calls} consultas a API-Football; después quedan guardadas).
+            </div>
+          )}
           <div className="table-wrap">
             <table className="grid">
               <thead>
@@ -193,7 +214,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
               <tbody>
                 {data?.rows.map((r) => (
                   <tr key={r.id}>
-                    <td className="small"><span title={r.league.country}>{flag(r.league.country_code)}</span> {r.league.name}</td>
+                    <td className="small league-cell"><Flag flag={r.league.flag} title={r.league.country} /> {r.league.name}</td>
                     <td className="c">
                       {r.score ? (
                         <span className="score" title={`HT ${r.score.ht[0]}-${r.score.ht[1]}`}>{r.score.ft[0]}-{r.score.ft[1]} <span className="muted small">({r.score.ht[0]}-{r.score.ht[1]})</span></span>
@@ -206,7 +227,9 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
                     {markets.map((k) => {
                       const c = r.markets[k];
                       return [
-                        <td key={k + "r"} className="c real" title={c ? `${c.hits}/${c.n} aciertos` : ""}>{fmt(c?.real)}<span className="n">{c?.n ?? 0}</span></td>,
+                        <td key={k + "r"} className="c real" title={c ? `${c.hits}/${c.n} aciertos` : ""}>
+                          {r.pending ? <span className="muted">…</span> : <>{fmt(c?.real)}<span className="n">{c?.n ?? 0}</span></>}
+                        </td>,
                         <td key={k + "b"} className="c" title={c?.bookmaker ? bkName(c.bookmaker) : ""}>{fmt(c?.book)}</td>,
                         <td key={k + "v"} className={`c ${c?.value == null ? "" : c.value > 0 ? "pos" : c.value < 0 ? "neg" : ""}`}>
                           {c?.value == null ? "—" : `${c.value > 0 ? "+" : ""}${c.value.toFixed(1)}%`}

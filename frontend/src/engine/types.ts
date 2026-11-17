@@ -15,6 +15,8 @@ export interface MatchData {
   hthg: number | null;
   htag: number | null;
   goals: Goal[];
+  /** true si se conocen los minutos de gol (los partidos bajados de a temporada no los traen) */
+  detail?: boolean;
   hc: number | null; ac: number | null; // corners
   hs: number | null; as: number | null; // tiros
   hsot: number | null; asot: number | null; // tiros al arco

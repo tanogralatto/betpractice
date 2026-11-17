@@ -1,0 +1,52 @@
+{
+  "_doc": "Mapeo API-Football -> catálogo propio. 'bookmakers': nombre de la casa en /odds/bookmakers -> clave interna. 'bets': nombre del tipo de apuesta en /odds/bets -> {valor -> clave de mercado}. En los valores se pueden usar comodines: {line} (número como 2.5, en el destino usar {k} = 2_5), {h} y {a} (goles en marcadores exactos 1:0). Lo que no esté acá se registra en el log como 'no mapeado'. 'ignore_bets': tipos que se descartan a propósito sin avisar.",
+  "bookmakers": {
+    "Bet365": "bet365",
+    "Pinnacle": "pinnacle",
+    "1xBet": "1xbet"
+  },
+  "bets": {
+    "Match Winner": {"Home": "1x2_1", "Draw": "1x2_x", "Away": "1x2_2"},
+    "Double Chance": {"Home/Draw": "dc_1x", "Home/Away": "dc_12", "Draw/Away": "dc_x2"},
+    "First Half Winner": {"Home": "1x2_ht_1", "Draw": "1x2_ht_x", "Away": "1x2_ht_2"},
+    "Second Half Winner": {"Home": "1x2_2h_1", "Draw": "1x2_2h_x", "Away": "1x2_2h_2"},
+    "HT/FT Double": {
+      "Home/Home": "htft_11", "Home/Draw": "htft_1x", "Home/Away": "htft_12",
+      "Draw/Home": "htft_x1", "Draw/Draw": "htft_xx", "Draw/Away": "htft_x2",
+      "Away/Home": "htft_21", "Away/Draw": "htft_2x", "Away/Away": "htft_22"
+    },
+    "Goals Over/Under": {"Over {line}": "ou_over_{k}", "Under {line}": "ou_under_{k}"},
+    "Goals Over/Under First Half": {"Over {line}": "ou_ht_over_{k}", "Under {line}": "ou_ht_under_{k}"},
+    "Both Teams Score": {"Yes": "btts_yes", "No": "btts_no"},
+    "Odd/Even": {"Odd": "odd_even_odd", "Even": "odd_even_even"},
+    "Highest Scoring Half": {"1st Half": "half_most_1h", "2nd Half": "half_most_2h", "Draw": "half_most_eq"},
+    "Team To Score Last": {"Home": "last_goal_home", "Away": "last_goal_away", "Draw": "last_goal_none", "No goal": "last_goal_none"},
+    "Exact Score": {"{h}:{a}": "cs_{h}{a}"},
+    "Correct Score - First Half": {"{h}:{a}": "cs_ht_{h}{a}"},
+    "Result/Total Goals": {
+      "Home/Over 2.5": "1x2ou25_1_over", "Home/Under 2.5": "1x2ou25_1_under",
+      "Draw/Over 2.5": "1x2ou25_x_over", "Draw/Under 2.5": "1x2ou25_x_under",
+      "Away/Over 2.5": "1x2ou25_2_over", "Away/Under 2.5": "1x2ou25_2_under"
+    },
+    "Clean Sheet - Home": {"Yes": "home_clean_sheet_yes", "No": "home_clean_sheet_no"},
+    "Clean Sheet - Away": {"Yes": "away_clean_sheet_yes", "No": "away_clean_sheet_no"},
+    "Win To Nil": {"Home": "home_win_to_nil", "Away": "away_win_to_nil"},
+    "Win Both Halves": {"Home": "home_win_both_halves", "Away": "away_win_both_halves"},
+    "To Win Either Half": {"Home": "home_win_either_half", "Away": "away_win_either_half"},
+    "Home Team Score a Goal in Both Halves": {"Yes": "home_score_both_halves"},
+    "Away Team Score a Goal in Both Halves": {"Yes": "away_score_both_halves"},
+    "Total - Home": {
+      "Over 1.5": "home_goals_2plus", "Over 2.5": "home_goals_3plus", "Over 3.5": "home_goals_4plus",
+      "Over 4.5": "home_goals_5plus", "Over 5.5": "home_goals_6plus"
+    },
+    "Total - Away": {
+      "Over 1.5": "away_goals_2plus", "Over 2.5": "away_goals_3plus", "Over 3.5": "away_goals_4plus",
+      "Over 4.5": "away_goals_5plus", "Over 5.5": "away_goals_6plus"
+    },
+    "Corners Over Under": {"Over {line}": "corners_over_{k}", "Under {line}": "corners_under_{k}"},
+    "Corners 1x2": {"1": "corners_1x2_1", "X": "corners_1x2_x", "2": "corners_1x2_2", "Home": "corners_1x2_1", "Draw": "corners_1x2_x", "Away": "corners_1x2_2"}
+  },
+  "ignore_bets": [
+    "Asian Handicap", "Asian Handicap First Half", "Home/Away", "Handicap Result", "Handicap Result - First Half"
+  ]
+}

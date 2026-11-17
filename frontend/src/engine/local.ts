@@ -1,4 +1,4 @@
-/** Implementación local (en el navegador) de la API: lee data/datos.json y calcula todo acá. */
+/** API de la página: todo se calcula en el navegador con los datos del depósito (data/repo.ts). */
 import type {
   Catalog, LeagueNode, OddsResponse, Preset, PresetConfig, PrematchRequest, PrematchResponse, Row, SampleResponse, SubKind, UserProfile,
 } from "../api";
@@ -7,73 +7,14 @@ import { BEST, BOOKMAKERS, BOOKMAKER_KEYS, CATEGORIES, MARKETS, MARKETS_BY_KEY, 
 import { rowPasses } from "./filters";
 import { load as loadStore, newId, save } from "./store";
 import { MatchData } from "./types";
+import * as AF from "../data/apiFootball";
+import { Cache } from "../data/storage";
+import { dayMatches, ensureLeagues, ensureOdds, history, leagueReady, loadDay, onChange, refresh, repo, setMode } from "../data/repo";
 
 export interface Meta { generated_at: string; provider: string; today: string; leagues_synced?: string[] }
-interface RawData {
-  meta: Meta;
-  leagues: [number, string, string, string | null][];
-  seasons: [number, number, number, string][];
-  teams: Record<string, string>;
-  matches: (number | string | null)[][];
-  odds: Record<string, Record<string, Record<string, number>>>;
-}
-interface League { id: number; name: string; country: string; code: string | null }
-interface DB {
-  meta: Meta;
-  leagues: Map<number, League>;
-  teams: Map<number, string>;
-  matches: Map<number, MatchData>;
-  byDay: Map<string, MatchData[]>;
-  odds: RawData["odds"];
-  history: A.History;
-}
 
-let dbPromise: Promise<DB> | null = null;
-
-function parseGoals(s: string | null): MatchData["goals"] {
-  if (!s) return [];
-  return s.split(" ").map((g) => {
-    const mt = /^(\d+)([ha])(\d)$/.exec(g)!;
-    return { minute: Number(mt[1]), side: mt[2] === "h" ? "home" : "away", half: Number(mt[3]) };
-  });
-}
-
-async function db(): Promise<DB> {
-  if (!dbPromise) {
-    dbPromise = (async () => {
-      const r = await fetch(`${import.meta.env.BASE_URL}data/datos.json`, { cache: "no-cache" });
-      if (!r.ok) throw new Error("No se encontraron los datos (data/datos.json). Corré “Actualizar datos”.");
-      const raw = (await r.json()) as RawData;
-      const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
-      const matches = new Map<number, MatchData>();
-      const byDay = new Map<string, MatchData[]>();
-      for (const x of raw.matches) {
-        const m: MatchData = {
-          id: Number(x[0]), leagueId: Number(x[1]), seasonId: Number(x[2]), kickoff: String(x[3]),
-          homeId: Number(x[4]), awayId: Number(x[5]), status: String(x[6]),
-          hg: n(x[7]), ag: n(x[8]), hthg: n(x[9]), htag: n(x[10]),
-          hc: n(x[11]), ac: n(x[12]), hs: n(x[13]), as: n(x[14]), hsot: n(x[15]), asot: n(x[16]),
-          hda: n(x[17]), ada: n(x[18]), hy: n(x[19]), ay: n(x[20]), goals: parseGoals(x[21] as string | null),
-        };
-        matches.set(m.id, m);
-        const d = m.kickoff.slice(0, 10);
-        if (!byDay.has(d)) byDay.set(d, []);
-        byDay.get(d)!.push(m);
-      }
-      const order: Record<number, number[]> = {};
-      for (const [id, lg] of [...raw.seasons].sort((a, b) => a[1] - b[1] || a[2] - b[2])) (order[lg] ||= []).push(id);
-      return {
-        meta: raw.meta,
-        leagues: new Map(raw.leagues.map(([id, name, country, code]) => [id, { id, name, country, code }])),
-        teams: new Map(Object.entries(raw.teams).map(([k, v]) => [Number(k), v])),
-        matches, byDay, odds: raw.odds,
-        history: new A.History([...matches.values()], order),
-      };
-    })();
-    dbPromise.catch(() => { dbPromise = null; });
-  }
-  return dbPromise;
-}
+/** Más de esta cantidad de ligas sin historial: se pide confirmación antes de gastar consultas. */
+const AUTO_LOAD_MAX = 25;
 
 // --- perfiles ---------------------------------------------------------------
 function fullProfile(p: ReturnType<typeof loadStore>["profiles"][number]): UserProfile {
@@ -112,15 +53,16 @@ function bookPrice(prices: Record<string, number> | undefined, bk: string): [num
   return prices[bk] !== undefined ? [prices[bk], bk] : [null, null];
 }
 
-function buildRow(d: DB, m: MatchData, p: UserProfile, markets: string[], stats: string[], streaks: string[], bookmaker: string): Row {
+function buildRow(m: MatchData, p: UserProfile, markets: string[], stats: string[], streaks: string[], bookmaker: string, ready: boolean): Row {
+  const h = history();
   const ro = p.real_odds_profile, pp = p.ppg_profile, sp = p.stats_profile, kp = p.streaks_profile;
-  const sample = ro ? A.realOddsSample(d.history, m, ro.sample, ro.home_as as A.Role, ro.away_as as A.Role) : { home: [], away: [], merged: [] };
-  const lg = d.leagues.get(m.leagueId)!;
+  const sample = ro && ready ? A.realOddsSample(h, m, ro.sample, ro.home_as as A.Role, ro.away_as as A.Role) : { home: [], away: [], merged: [] };
+  const lg = repo.leagues.get(m.leagueId)!;
   const row: Row = {
-    id: m.id, kickoff: m.kickoff, status: m.status,
-    league: { id: lg.id, name: lg.name, country: lg.country, country_code: lg.code },
-    home: { id: m.homeId, name: d.teams.get(m.homeId) ?? "?", ppg: r2(A.ppg(d.history, m, m.homeId, (pp?.home_as ?? "both") as A.Role)) },
-    away: { id: m.awayId, name: d.teams.get(m.awayId) ?? "?", ppg: r2(A.ppg(d.history, m, m.awayId, (pp?.away_as ?? "both") as A.Role)) },
+    id: m.id, kickoff: m.kickoff, status: m.status, pending: !ready,
+    league: { id: lg.id, name: lg.name, country: lg.country, country_code: null, flag: lg.flag },
+    home: { id: m.homeId, name: repo.teams.get(m.homeId) ?? "?", ppg: ready ? r2(A.ppg(h, m, m.homeId, (pp?.home_as ?? "both") as A.Role)) : null },
+    away: { id: m.awayId, name: repo.teams.get(m.awayId) ?? "?", ppg: ready ? r2(A.ppg(h, m, m.awayId, (pp?.away_as ?? "both") as A.Role)) : null },
     score: (m.status === "FT" || m.status === "LIVE") && m.hg !== null ? { ft: [m.hg, m.ag!], ht: [m.hthg, m.htag] } : null,
     sample_n: sample.merged.length, sample_home_n: sample.home.length, sample_away_n: sample.away.length,
     markets: {}, stats: {}, streaks: {},
@@ -129,26 +71,32 @@ function buildRow(d: DB, m: MatchData, p: UserProfile, markets: string[], stats:
     const mk = MARKETS_BY_KEY[k];
     if (!mk) continue;
     const res = A.realOdds(sample.merged, mk);
-    const [book, bk] = bookPrice(d.odds[m.id]?.[k], bookmaker);
+    const [book, bk] = bookPrice(repo.odds[m.id]?.[k], bookmaker);
     row.markets[k] = { real: r2(res.odds), prob: r2(res.prob, 4), hits: res.hits, n: res.n, book, bookmaker: bk, value: r2(A.valuePct(book, res.odds), 1) };
   }
+  if (!ready) return row;
   for (const k of stats) {
     const st = STATS_BY_KEY[k];
     if (!st || !sp) continue;
-    const [h, nh] = A.teamStat(d.history, m, m.homeId, sp.home_as as A.Role, sp.seasons, st);
-    const [a, na] = A.teamStat(d.history, m, m.awayId, sp.away_as as A.Role, sp.seasons, st);
-    row.stats[k] = { home: r2(h), away: r2(a), avg: r2(A.avgOf(h, a)), n_home: nh, n_away: na };
+    const [hv, nh] = A.teamStat(h, m, m.homeId, sp.home_as as A.Role, sp.seasons, st);
+    const [av, na] = A.teamStat(h, m, m.awayId, sp.away_as as A.Role, sp.seasons, st);
+    row.stats[k] = { home: r2(hv), away: r2(av), avg: r2(A.avgOf(hv, av)), n_home: nh, n_away: na };
   }
   for (const k of streaks) {
     const sd = STREAKS_BY_KEY[k];
     if (!sd || !kp) continue;
     row.streaks[k] = {
-      home: A.teamStreak(d.history, m, m.homeId, kp.home_as as A.Role, kp.seasons, sd),
-      away: A.teamStreak(d.history, m, m.awayId, kp.away_as as A.Role, kp.seasons, sd),
+      home: A.teamStreak(h, m, m.homeId, kp.home_as as A.Role, kp.seasons, sd),
+      away: A.teamStreak(h, m, m.awayId, kp.away_as as A.Role, kp.seasons, sd),
     };
   }
   return row;
 }
+
+const EXTRA: Record<string, number> = { last_8: 1, current: 0, current_plus_1: 1, current_plus_2: 2, current_plus_3: 3 };
+const extraSeasons = (p: UserProfile) =>
+  Math.max(EXTRA[p.real_odds_profile?.sample ?? "current_plus_1"] ?? 1, EXTRA[p.stats_profile?.seasons ?? "current"] ?? 0,
+    EXTRA[p.streaks_profile?.seasons ?? "current"] ?? 0);
 
 const SORTS: Record<string, (a: Row, b: Row) => number> = {
   time: (a, b) => a.kickoff.localeCompare(b.kickoff) || a.league.name.localeCompare(b.league.name),
@@ -157,69 +105,89 @@ const SORTS: Record<string, (a: Row, b: Row) => number> = {
   ppg_away: (a, b) => (b.away.ppg ?? -1) - (a.away.ppg ?? -1) || a.kickoff.localeCompare(b.kickoff),
 };
 
+const confirmedAll = new Set<string>(); // días en que el usuario aceptó calcular todas las ligas
+
 async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
-  const d = await db();
+  await loadDay(req.date);
   const p = getProfile(req.profile_id);
   const markets = req.markets ?? p.fav_markets;
   const stats = (req.stats ?? p.fav_stats).slice(0, 3);
   const streaks = (req.streaks ?? p.fav_streaks).slice(0, 3);
   const bookmaker = req.bookmaker || p.fav_bookmakers[0] || BEST;
-  const all = (d.byDay.get(req.date) ?? []).filter((m) => m.status !== "CANC");
-  const countries = new Map<string, { country: string; code: string | null; count: number; league_ids: Set<number> }>();
+  const all = dayMatches(req.date).filter((m) => m.status !== "CANC");
+  const countries = new Map<string, { country: string; code: string | null; flag: string | null; count: number; league_ids: Set<number> }>();
   for (const m of all) {
-    const lg = d.leagues.get(m.leagueId)!;
-    const c = countries.get(lg.country) ?? { country: lg.country, code: lg.code, count: 0, league_ids: new Set<number>() };
+    const lg = repo.leagues.get(m.leagueId)!;
+    const c = countries.get(lg.country) ?? { country: lg.country, code: null, flag: lg.flag, count: 0, league_ids: new Set<number>() };
     c.count++;
     c.league_ids.add(lg.id);
     countries.set(lg.country, c);
   }
   const fav = new Set(p.fav_leagues);
   const leagues = new Set(req.leagues);
-  let rows = all.filter((m) => !leagues.size || leagues.has(m.leagueId)).map((m) => buildRow(d, m, p, markets, stats, streaks, bookmaker));
+  const selected = all.filter((m) => !leagues.size || leagues.has(m.leagueId));
+
+  // Historial y cuotas: se piden solo para las ligas que se están mirando.
+  const extra = extraSeasons(p);
+  const needed = [...new Set(selected.map((m) => m.leagueId))];
+  const missing = needed.filter((l) => !leagueReady(l, extra));
+  if (req.load_all) confirmedAll.add(req.date);
+  const auto = missing.length <= AUTO_LOAD_MAX || confirmedAll.has(req.date);
+  if (auto) {
+    ensureLeagues(missing, extra);
+    ensureOdds(req.date, [...new Set(selected.filter((m) => m.status === "NS").map((m) => m.leagueId))]);
+  }
+
+  let rows = selected.map((m) => buildRow(m, p, markets, stats, streaks, bookmaker, leagueReady(m.leagueId, extra)));
   if (req.hide_without_odds && markets.length) rows = rows.filter((r) => r.markets[markets[0]]?.book != null);
-  rows = rows.filter((r) => rowPasses(r, req.filters)).sort(SORTS[req.sort] ?? SORTS.time);
+  const hasFilters = !!req.filters && Object.keys(req.filters).length > 0;
+  rows = rows.filter((r) => (r.pending && hasFilters ? false : rowPasses(r, req.filters))).sort(SORTS[req.sort] ?? SORTS.time);
   return {
     date: req.date, profile: { id: p.id, name: p.name }, markets, stats, streaks, bookmaker, rows,
     shown: rows.length, shown_leagues: new Set(rows.map((r) => r.league.id)).size,
     total: all.length, total_leagues: new Set(all.map((m) => m.leagueId)).size,
     favorites_count: all.filter((m) => !fav.size || fav.has(m.leagueId)).length,
     countries: [...countries.values()].map((c) => ({ ...c, league_ids: [...c.league_ids].sort((a, b) => a - b) }))
-      .sort((a, b) => a.country.localeCompare(b.country)),
+      .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country)),
+    loading: repo.loading.size,
+    pending_leagues: auto ? 0 : missing.length,
+    pending_calls: auto ? 0 : missing.length * (extra + 1) + needed.length,
+    errors: [...new Set(repo.errors)],
+    mode: repo.mode,
   };
 }
 
 async function sample(id: number, profileId: number | null, marketKey: string): Promise<SampleResponse> {
-  const d = await db();
-  const m = d.matches.get(id);
+  const m = repo.matches.get(id);
   if (!m) throw new Error("Partido no encontrado");
   const ro = getProfile(profileId).real_odds_profile!;
-  const s = A.realOddsSample(d.history, m, ro.sample, ro.home_as as A.Role, ro.away_as as A.Role);
+  const s = A.realOddsSample(history(), m, ro.sample, ro.home_as as A.Role, ro.away_as as A.Role);
   const mk = MARKETS_BY_KEY[marketKey] ?? MARKETS_BY_KEY.ou_ht_over_0_5;
   const res = A.realOdds(s.merged, mk);
+  const used = new Set(A.usable(s.merged, mk).map((x) => x.id));
   const hs = new Set(s.home.map((x) => x.id)), as = new Set(s.away.map((x) => x.id));
-  const { check, ...market } = mk;
+  const { check, needs, ...market } = mk;
   return {
-    match: { id, home: d.teams.get(m.homeId)!, away: d.teams.get(m.awayId)!, league: d.leagues.get(m.leagueId)!.name, kickoff: m.kickoff },
+    match: { id, home: repo.teams.get(m.homeId)!, away: repo.teams.get(m.awayId)!, league: repo.leagues.get(m.leagueId)!.name, kickoff: m.kickoff },
     profile: { name: ro.name, sample: ro.sample, home_as: ro.home_as, away_as: ro.away_as },
-    market, real: r2(res.odds), hits: res.hits, n: s.merged.length, n_home: s.home.length, n_away: s.away.length,
+    market, real: r2(res.odds), hits: res.hits, n: res.n, n_home: s.home.length, n_away: s.away.length,
     matches: s.merged.map((x) => ({
-      id: x.id, date: x.kickoff, home: d.teams.get(x.homeId)!, away: d.teams.get(x.awayId)!,
-      ft: [x.hg, x.ag], ht: [x.hthg, x.htag], hit: mk.check(x),
+      id: x.id, date: x.kickoff, home: repo.teams.get(x.homeId)!, away: repo.teams.get(x.awayId)!,
+      ft: [x.hg, x.ag], ht: [x.hthg, x.htag], hit: used.has(x.id) ? mk.check(x) : null,
       from: hs.has(x.id) && as.has(x.id) ? "both" : hs.has(x.id) ? "home" : "away",
     })),
   };
 }
 
 async function odds(id: number, markets: string[]): Promise<OddsResponse> {
-  const d = await db();
-  const om = d.odds[id] ?? {};
+  const om = repo.odds[id] ?? {};
   const keys = markets.length ? markets : MARKETS.map((m) => m.key).filter((k) => om[k]);
   return {
     bookmakers: BOOKMAKER_KEYS,
     rows: keys.map((k) => {
       const prices = om[k] ?? {};
       const vals = Object.values(prices);
-      const { check, ...market } = MARKETS_BY_KEY[k] ?? { key: k, name: k, group: "", category: "", popular: false, check: null };
+      const { check, needs, ...market } = MARKETS_BY_KEY[k] ?? { key: k, name: k, group: "", category: "", popular: false, check: null, needs: undefined };
       return { market, prices: Object.fromEntries(BOOKMAKER_KEYS.map((b) => [b, prices[b] ?? null])), best: vals.length ? Math.max(...vals) : null };
     }),
   };
@@ -227,10 +195,12 @@ async function odds(id: number, markets: string[]): Promise<OddsResponse> {
 
 // --- API local ----------------------------------------------------------------
 const ok = <T,>(v: T) => Promise.resolve(v);
-const strip = <T extends { check: unknown }>({ check, ...rest }: T) => rest;
+const strip = <T extends { check: unknown; needs?: unknown }>({ check, needs, ...rest }: T) => rest;
 
 export const localApi = {
-  meta: async () => (await db()).meta,
+  meta: async (): Promise<Meta> => repo.mode === "api"
+    ? { provider: "api_football", generated_at: new Date().toISOString(), today: new Date().toLocaleDateString("en-CA") }
+    : { provider: "seed", generated_at: repo.demoMeta?.generated_at ?? new Date().toISOString(), today: repo.demoMeta?.today ?? "" },
   catalog: (): Promise<Catalog> => ok({
     markets: MARKETS.map(strip), market_categories: CATEGORIES,
     stats: STATS.map(({ key, name }) => ({ key, name })), streaks: STREAKS.map(({ key, name }) => ({ key, name })),
@@ -242,15 +212,31 @@ export const localApi = {
     ],
   }),
   leagues: async (): Promise<LeagueNode[]> => {
-    const d = await db();
     const out = new Map<string, LeagueNode>();
-    for (const lg of [...d.leagues.values()].sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name))) {
-      if (!out.has(lg.country)) out.set(lg.country, { country: lg.country, code: lg.code, leagues: [] });
+    for (const lg of [...repo.leagues.values()].sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name))) {
+      if (!out.has(lg.country)) out.set(lg.country, { country: lg.country, code: null, leagues: [] });
       out.get(lg.country)!.leagues.push({ id: lg.id, name: lg.name });
     }
     return [...out.values()];
   },
-  health: async () => ({ ok: true, provider: (await db()).meta.provider }),
+  health: async () => ({ ok: true, provider: repo.mode === "api" ? "api_football" : "seed" }),
+  onChange,
+  refresh,
+  settings: {
+    keySource: AF.keySource,
+    hasKey: () => !!AF.getKey(),
+    mode: () => repo.mode,
+    async saveKey(k: string) {
+      const st = await AF.trySetKey(k);
+      setMode("api");
+      return st;
+    },
+    removeKey() { AF.setKey(""); setMode(AF.getKey() ? "api" : "demo"); },
+    status: AF.status,
+    usage: () => ({ ...AF.usage }),
+    useDemo(on: boolean) { setMode(on || !AF.getKey() ? "demo" : "api"); },
+    async clearCache() { await Cache.clear(); setMode(repo.mode); },
+  },
   profiles: () => ok(loadStore().profiles.map(fullProfile)),
   createProfile: (b: Partial<UserProfile>) => {
     const s = loadStore();
