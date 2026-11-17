@@ -1,0 +1,29 @@
+{"get": "fixtures", "errors": [], "results": 2, "paging": {"current": 1, "total": 1},
+ "response": [
+  {"fixture": {"id": 1001, "date": "2026-10-04T17:00:00-03:00", "status": {"short": "FT", "elapsed": 90}},
+   "league": {"id": 128, "season": 2026, "round": "2nd Phase - 10"},
+   "teams": {"home": {"id": 451, "name": "Boca Juniors"}, "away": {"id": 435, "name": "River Plate"}},
+   "goals": {"home": 2, "away": 1},
+   "score": {"halftime": {"home": 1, "away": 0}, "fulltime": {"home": 2, "away": 1}},
+   "events": [
+     {"time": {"elapsed": 12, "extra": null}, "team": {"id": 451}, "player": {"name": "A"}, "type": "Goal", "detail": "Normal Goal"},
+     {"time": {"elapsed": 30, "extra": null}, "team": {"id": 435}, "player": {"name": "B"}, "type": "Card", "detail": "Yellow Card"},
+     {"time": {"elapsed": 55, "extra": null}, "team": {"id": 435}, "player": {"name": "C"}, "type": "Goal", "detail": "Missed Penalty"},
+     {"time": {"elapsed": 67, "extra": null}, "team": {"id": 451}, "player": {"name": "D"}, "type": "Goal", "detail": "Own Goal"},
+     {"time": {"elapsed": 90, "extra": 3}, "team": {"id": 451}, "player": {"name": "E"}, "type": "Goal", "detail": "Penalty"}
+   ],
+   "statistics": [
+     {"team": {"id": 451}, "statistics": [{"type": "Shots on Goal", "value": 6}, {"type": "Total Shots", "value": 14}, {"type": "Corner Kicks", "value": 7}, {"type": "Yellow Cards", "value": 2}, {"type": "Ball Possession", "value": "55%"}]},
+     {"team": {"id": 435}, "statistics": [{"type": "Shots on Goal", "value": 3}, {"type": "Total Shots", "value": 9}, {"type": "Corner Kicks", "value": 4}, {"type": "Yellow Cards", "value": null}, {"type": "Ball Possession", "value": "45%"}]}
+   ]},
+  {"fixture": {"id": 1002, "date": "2026-10-11T19:30:00-03:00", "status": {"short": "FT", "elapsed": 90}},
+   "league": {"id": 128, "season": 2026, "round": "2nd Phase - 11"},
+   "teams": {"home": {"id": 436, "name": "Racing Club"}, "away": {"id": 451, "name": "Boca Juniors"}},
+   "goals": {"home": 0, "away": 0},
+   "score": {"halftime": {"home": 0, "away": 0}, "fulltime": {"home": 0, "away": 0}},
+   "events": [],
+   "statistics": [
+     {"team": {"id": 436}, "statistics": [{"type": "Corner Kicks", "value": 5}, {"type": "Total Shots", "value": 8}, {"type": "Shots on Goal", "value": 1}, {"type": "Yellow Cards", "value": 3}]},
+     {"team": {"id": 451}, "statistics": [{"type": "Corner Kicks", "value": null}, {"type": "Total Shots", "value": 6}, {"type": "Shots on Goal", "value": 0}, {"type": "Yellow Cards", "value": 1}]}
+   ]}
+ ]}

@@ -1,0 +1,13 @@
+{"get": "fixtures", "errors": [], "results": 2, "paging": {"current": 1, "total": 1},
+ "response": [
+  {"fixture": {"id": 1003, "date": "2026-11-17T21:00:00-03:00", "status": {"short": "NS", "elapsed": null}},
+   "league": {"id": 128, "season": 2026, "round": "2nd Phase - 16"},
+   "teams": {"home": {"id": 435, "name": "River Plate"}, "away": {"id": 436, "name": "Racing Club"}},
+   "goals": {"home": null, "away": null},
+   "score": {"halftime": {"home": null, "away": null}, "fulltime": {"home": null, "away": null}}},
+  {"fixture": {"id": 9999, "date": "2026-11-17T16:00:00-03:00", "status": {"short": "NS", "elapsed": null}},
+   "league": {"id": 999, "season": 2026, "round": "Round 1"},
+   "teams": {"home": {"id": 1, "name": "Liga no seguida A"}, "away": {"id": 2, "name": "Liga no seguida B"}},
+   "goals": {"home": null, "away": null},
+   "score": {"halftime": {"home": null, "away": null}, "fulltime": {"home": null, "away": null}}}
+ ]}
