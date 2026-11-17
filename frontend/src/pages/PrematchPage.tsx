@@ -134,11 +134,15 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
             <label className="switch"><input type="checkbox" checked={hide} onChange={(e) => setHide(e.target.checked)} /> Ocultar partidos sin cuota del mercado principal</label>
           </Section>
           <Section title="Ordenar">
+            {["value", "real", "book"].includes(sort) && markets[0] && <div className="muted small">Según {mName[markets[0]]} (mercado principal)</div>}
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="time">Por hora</option>
               <option value="league">Por liga</option>
               <option value="ppg_home">PPG local</option>
               <option value="ppg_away">PPG visitante</option>
+              <option value="value">Valor % (mayor primero)</option>
+              <option value="real">Cuota real (menor primero)</option>
+              <option value="book">Cuota de la casa (mayor primero)</option>
             </select>
           </Section>
           <Section title="Perfil">

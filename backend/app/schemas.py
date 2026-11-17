@@ -74,5 +74,5 @@ class PrematchRequest(BaseModel):
     streaks: list[str] | None = None
     bookmaker: str | None = None
     hide_without_odds: bool = False
-    sort: Literal["time", "league", "ppg_home", "ppg_away"] = "time"
+    sort: Literal["time", "league", "ppg_home", "ppg_away", "value", "real", "book"] = "time"
     filters: dict | None = None

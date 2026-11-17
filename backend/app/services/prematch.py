@@ -151,7 +151,14 @@ def prematch(db: Session, req: dict) -> dict:
         main = markets[0]
         rows = [r for r in rows if r["markets"].get(main, {}).get("book") is not None]
     rows = [r for r in rows if row_passes(r, req.get("filters"))]
-    rows.sort(key=SORTS.get(req.get("sort") or "time", SORTS["time"]))
+    sort = req.get("sort") or "time"
+    if sort in ("value", "real", "book") and markets:
+        # mercado principal; sin dato al final; valor y casa de mayor a menor, cuota real de menor a mayor
+        sign = 1 if sort == "real" else -1
+        rows.sort(key=lambda r: (r["markets"].get(markets[0], {}).get(sort) is None,
+                                 sign * (r["markets"].get(markets[0], {}).get(sort) or 0), r["kickoff"]))
+    else:
+        rows.sort(key=SORTS.get(sort, SORTS["time"]))
 
     return {
         "date": day.isoformat(),

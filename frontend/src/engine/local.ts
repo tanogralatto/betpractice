@@ -105,6 +105,18 @@ const SORTS: Record<string, (a: Row, b: Row) => number> = {
   ppg_away: (a, b) => (b.away.ppg ?? -1) - (a.away.ppg ?? -1) || a.kickoff.localeCompare(b.kickoff),
 };
 
+/** Orden por el mercado principal (el primero elegido). Los partidos sin dato van al final. */
+function byMarket(sort: string, main: string | undefined): ((a: Row, b: Row) => number) | null {
+  const field = { value: "value", real: "real", book: "book" }[sort] as "value" | "real" | "book" | undefined;
+  if (!field || !main) return null;
+  const desc = field !== "real"; // valor y cuota de la casa: mayor primero; cuota real: menor primero (más probable)
+  return (a, b) => {
+    const x = a.markets[main]?.[field] ?? null, y = b.markets[main]?.[field] ?? null;
+    if (x === null || y === null) return x === y ? SORTS.time(a, b) : x === null ? 1 : -1;
+    return (desc ? y - x : x - y) || SORTS.time(a, b);
+  };
+}
+
 const confirmedAll = new Set<string>(); // días en que el usuario aceptó calcular todas las ligas
 
 async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
@@ -141,7 +153,8 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   let rows = selected.map((m) => buildRow(m, p, markets, stats, streaks, bookmaker, leagueReady(m.leagueId, extra)));
   if (req.hide_without_odds && markets.length) rows = rows.filter((r) => r.markets[markets[0]]?.book != null);
   const hasFilters = !!req.filters && Object.keys(req.filters).length > 0;
-  rows = rows.filter((r) => (r.pending && hasFilters ? false : rowPasses(r, req.filters))).sort(SORTS[req.sort] ?? SORTS.time);
+  rows = rows.filter((r) => (r.pending && hasFilters ? false : rowPasses(r, req.filters)));
+  rows.sort(byMarket(req.sort, markets[0]) ?? SORTS[req.sort] ?? SORTS.time);
   return {
     date: req.date, profile: { id: p.id, name: p.name }, markets, stats, streaks, bookmaker, rows,
     shown: rows.length, shown_leagues: new Set(rows.map((r) => r.league.id)).size,
