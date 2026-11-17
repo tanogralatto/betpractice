@@ -10,32 +10,18 @@ anteriores, pensada sobre todo para el mercado **Over 0.5 goles en el 1er tiempo
 
 ## Cómo se usa (sin instalar nada)
 
-La app es una página web publicada por GitHub, como cualquier otra:
-**https://tanogralatto.github.io/betpractice/**
+Es una página web, como tus otras apps: **https://tanogralatto.github.io/betpractice/**
 
-Todo se calcula en tu navegador. Tus perfiles y presets quedan guardados en ese navegador.
+1. Abrila. Si ya cargaste tu clave de API-Football en tu otra app de este mismo sitio, la
+   reconoce sola. Si no, tocá **⚙ Ajustes**, pegá la clave y tocá **Guardar y probar**.
+2. Elegí el día. Aparecen todos los partidos de ese día que tenga API-Football.
+3. Las cuotas reales se calculan solas para las ligas que estás mirando. La primera vez que mirás
+   una liga se bajan sus temporadas (2–3 consultas); después quedan guardadas en el navegador.
+   Si el día tiene muchas ligas, elegí las que te interesan con los chips de países o el panel
+   **Ligas**, o tocá **“calculá todas”**.
+4. **↻ Actualizar** vuelve a pedir los partidos y las cuotas del día.
 
-### Actualizar los datos (a mano)
-
-1. En GitHub entrá a la pestaña **Actions**.
-2. A la izquierda elegí **“Actualizar datos y publicar”**.
-3. Tocá **“Run workflow”**. Podés cambiar las ligas y los días, y después tocá el botón verde
-   **“Run workflow”**.
-4. En unos minutos la página muestra los datos nuevos. Arriba a la derecha dice cuándo se
-   actualizaron.
-
-En la misma página hay un acceso directo: **“↻ Actualizar datos”**.
-
-Las ligas se indican con el número que usa API-Football: **128** = Argentina Liga Profesional,
-**39** = Premier League, 140 = LaLiga, 135 = Serie A, 5 = Nations League.
-
-### Configuración (una sola vez)
-
-1. **Publicar la página:** Settings → Pages → en “Source” elegí **GitHub Actions**.
-2. **Rama principal:** Settings → General → “Default branch” → elegí **main**.
-3. **Clave de API-Football:** Settings → Secrets and variables → Actions → **New repository
-   secret** → Name: `API_FOOTBALL_KEY`, Secret: tu clave. Queda oculta: nadie la puede ver,
-   ni siquiera vos después de guardarla. Mientras no esté cargada, la página muestra **datos de prueba**.
+Sin clave se ven **datos de prueba** (inventados) para conocer la app.
 
 ---
 
@@ -58,15 +44,23 @@ frontend/               React + Vite + TypeScript (tema oscuro)
 docs/especificacion.md
 ```
 
-### Cómo funciona la publicación
+### Cómo funciona
 
-La página no tiene servidor. La acción **Actualizar datos y publicar** hace lo siguiente:
-1. Recupera la base SQLite guardada en la rama `datos`.
-2. Sincroniza con API-Football en forma incremental (solo con el botón manual).
-3. Exporta `datos.json`.
-4. Arma la página y la publica en GitHub Pages.
-
-Cada push a `main` vuelve a publicar con los datos guardados, sin pedir nada a la API.
+- La página no tiene servidor. Le pide los datos a API-Football **directamente desde el navegador**
+  (`frontend/src/data/apiFootball.ts`), igual que las otras apps:
+  - partidos del día con `/fixtures?date`;
+  - temporadas por liga con `/fixtures?league&season`, que traen los goles al descanso;
+  - cuotas con `/odds?date&league&season`.
+- Lo bajado se guarda en IndexedDB: las temporadas pasadas se bajan una vez; la actual se
+  renueva cada 3 h y las cuotas cada 30 min.
+- La clave se guarda en el navegador (`cr:key`). Si no hay, se usa la de la otra app del
+  mismo sitio (`o05:key`).
+- Los partidos bajados por temporada no traen minutos de gol ni corners. Los mercados que los
+  necesitan (primer/último gol, corners) muestran “—” hasta que haya esos datos.
+- La acción `.github/workflows/publicar.yml` arma la página con datos de prueba (seed) y la
+  publica en cada cambio de `main`. No usa la clave ni hay que tocarla.
+- `backend/` (Python) queda para desarrollo, tests y para sincronizar a una base local
+  (`python -m app.sync`), con el mismo algoritmo.
 
 ### Requisitos
 

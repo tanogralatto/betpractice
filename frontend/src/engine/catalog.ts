@@ -3,7 +3,11 @@ import {
   FT, MatchData, ga, gf, htGa, htGf, htTotal, resultChar, shAg, shHg, shTotal, sortedGoals, total, totalCorners,
 } from "./types";
 
-export interface MarketDef { key: string; name: string; group: string; category: string; popular: boolean; check: (m: FT) => boolean }
+export interface MarketDef {
+  key: string; name: string; group: string; category: string; popular: boolean; check: (m: FT) => boolean;
+  /** dato extra que necesita: minutos de gol o corners (si falta, ese partido no entra en la muestra) */
+  needs?: "goals" | "corners";
+}
 export interface StatDef { key: string; name: string; value: (m: FT, team: number) => number | null }
 export interface StreakDef { key: string; name: string; check: (m: FT, team: number) => boolean }
 
@@ -11,7 +15,10 @@ export const CATEGORIES: Record<string, string> = { marcador: "Marcador", goles:
 
 export const MARKETS: MarketDef[] = [];
 const add = (key: string, name: string, group: string, category: string, check: (m: FT) => boolean, popular = false) =>
-  MARKETS.push({ key, name, group, category, check, popular });
+  MARKETS.push({
+    key, name, group, category, check, popular,
+    needs: category === "corners" ? "corners" : /^(last_goal_|first_goal_(?!none))/.test(key) ? "goals" : undefined,
+  });
 const f1 = (l: number) => l.toFixed(1);
 const k1 = (l: number) => f1(l).replace(".", "_");
 const res = (h: number, a: number) => (h > a ? "1" : h === a ? "X" : "2");

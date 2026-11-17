@@ -279,3 +279,10 @@ def test_sync_actualiza_partido_cuando_cambia_el_resultado(db):
     db.refresh(m)
     assert (m.status, m.hg, m.hthg, m.details_synced) == ("FT", 1, 0, False)
     assert s.report.matches_updated == 1
+
+
+def test_mapeo_de_la_pagina_igual_al_del_backend():
+    root = Path(__file__).resolve().parents[2]
+    back = json.loads((root / "backend/app/providers/api_football_mapping.json").read_text(encoding="utf-8"))
+    front = json.loads((root / "frontend/src/data/oddsMapping.json").read_text(encoding="utf-8"))
+    assert back == front, "Copiá backend/app/providers/api_football_mapping.json a frontend/src/data/oddsMapping.json"

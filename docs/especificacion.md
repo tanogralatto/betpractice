@@ -167,14 +167,16 @@ manteniendo el `seed` como alternativa para desarrollo y tests.
 
 ## Publicación en GitHub Pages (cambio de plan 2)
 
-La app se usa como una página publicada por GitHub Pages, sin servidor:
+La app se usa como una página publicada por GitHub Pages, sin servidor, igual que las otras
+apps del usuario:
 
 - El cálculo (cuota real, PPG, estadísticas, rachas, filtros) corre en el navegador
   (`frontend/src/engine/`), con el mismo algoritmo y catálogo que `backend/app/`. Se verificó
   que ambos den resultados idénticos sobre los mismos datos.
-- Los perfiles, sub-perfiles y presets se guardan en el navegador (localStorage).
-- Los datos salen de `data/datos.json`, generado por `python -m app.export_static`.
-- La actualización de datos es **manual**: acción de GitHub “Actualizar datos y publicar”
-  (botón “Run workflow”). Sincroniza API-Football con la clave del secreto `API_FOOTBALL_KEY`
-  y guarda la base en la rama `datos` para que la próxima vez sea incremental. Más adelante se
-  puede programar para que corra sola.
+- Los datos se piden a API-Football **en el momento**, desde el navegador, con la clave cargada en
+  ⚙ Ajustes. Si no hay clave propia, se reutiliza la de la otra app del mismo sitio. Se pueden ver
+  los partidos de cualquier día y liga.
+- Historiales y cuotas quedan guardados en el navegador (IndexedDB) para ahorrar consultas.
+  Si un día tiene más de 25 ligas sin historial, se pide confirmación antes de bajarlas todas.
+- Perfiles, sub-perfiles y presets se guardan en el navegador (localStorage).
+- Sin clave se muestran datos de prueba (seed), generados al publicar.

@@ -64,7 +64,14 @@ export function realOddsSample(h: History, m: MatchData, sample: string, homeAs:
 
 export interface RealOdds { odds: number | null; prob: number | null; hits: number; n: number }
 
-export function realOdds(sample: FT[], market: MarketDef): RealOdds {
+/** Partidos de la muestra que tienen el dato que necesita el mercado. */
+export const usable = (sample: FT[], market: MarketDef) =>
+  market.needs === "goals" ? sample.filter((m) => m.detail !== false)
+    : market.needs === "corners" ? sample.filter((m) => m.hc !== null && m.ac !== null)
+    : sample;
+
+export function realOdds(all: FT[], market: MarketDef): RealOdds {
+  const sample = usable(all, market);
   const n = sample.length;
   if (!n) return { odds: null, prob: null, hits: 0, n: 0 };
   const hits = sample.filter((m) => market.check(m)).length;

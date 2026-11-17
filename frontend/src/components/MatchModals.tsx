@@ -45,7 +45,7 @@ export function SampleModal({ row, markets, profileId, catalog, onClose }: {
                   <td className="c muted">{m.ht[0]}-{m.ht[1]}</td>
                   <td className={m.away === row.home.name || m.away === row.away.name ? "b" : ""}>{m.away}</td>
                   <td className="muted small">{m.from === "both" ? "ambos" : m.from === "home" ? "local" : "visitante"}</td>
-                  <td className={`c ${m.hit ? "pos" : "neg"}`}>{m.hit ? "✔ Acierto" : "✘ Fallo"}</td>
+                  <td className={`c ${m.hit === null ? "muted" : m.hit ? "pos" : "neg"}`}>{m.hit === null ? "sin dato" : m.hit ? "✔ Acierto" : "✘ Fallo"}</td>
                 </tr>
               ))}
             </tbody>

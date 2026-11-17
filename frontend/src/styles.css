@@ -139,3 +139,9 @@ legend { padding: 0 6px; font-weight: 600; }
 .grid td.wrap { white-space: normal; min-width: 140px; }
 a.link-tag { color: var(--accent); text-decoration: none; border-color: var(--accent); }
 a.link-tag:hover { background: #0d2a3d; }
+.notice { background: #2b230c; border: 1px solid var(--main); color: #f0d48a; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.notice button.link { color: #ffd76a; text-decoration: underline; }
+img.flag { width: 18px; height: 13px; object-fit: cover; vertical-align: -2px; border-radius: 2px; }
+.league-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.settings-btn { margin-left: 8px; }
+.modal h4 { margin: 12px 0 6px; }

@@ -48,7 +48,8 @@ export interface Row {
   id: number;
   kickoff: string;
   status: string;
-  league: { id: number; name: string; country: string; country_code: string | null };
+  league: { id: number; name: string; country: string; country_code: string | null; flag?: string | null };
+  pending?: boolean; // todavía se está bajando el historial de la liga
   home: { id: number; name: string; ppg: number | null };
   away: { id: number; name: string; ppg: number | null };
   score: { ft: [number, number]; ht: [number | null, number | null] } | null;
@@ -72,7 +73,12 @@ export interface PrematchResponse {
   total: number;
   total_leagues: number;
   favorites_count: number;
-  countries: { country: string; code: string | null; count: number; league_ids: number[] }[];
+  countries: { country: string; code: string | null; flag?: string | null; count: number; league_ids: number[] }[];
+  loading?: number;
+  pending_leagues?: number;
+  pending_calls?: number;
+  errors?: string[];
+  mode?: "api" | "demo";
 }
 export interface PrematchRequest {
   date: string;
@@ -85,6 +91,7 @@ export interface PrematchRequest {
   hide_without_odds: boolean;
   sort: string;
   filters: Filters;
+  load_all?: boolean;
 }
 export interface SampleResponse {
   match: { id: number; home: string; away: string; league: string; kickoff: string };
@@ -95,7 +102,7 @@ export interface SampleResponse {
   n: number;
   n_home: number;
   n_away: number;
-  matches: { id: number; date: string; home: string; away: string; ft: [number, number]; ht: [number, number]; hit: boolean; from: string }[];
+  matches: { id: number; date: string; home: string; away: string; ft: [number, number]; ht: [number, number]; hit: boolean | null; from: string }[];
 }
 export interface OddsResponse { bookmakers: string[]; rows: { market: Market; prices: Record<string, number | null>; best: number | null }[] }
 export interface Preset { id: number; name: string; config: PresetConfig }
