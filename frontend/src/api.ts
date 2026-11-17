@@ -104,6 +104,21 @@ export interface SampleResponse {
   n_away: number;
   matches: { id: number; date: string; home: string; away: string; ft: [number, number]; ht: [number, number]; hit: boolean | null; from: string }[];
 }
+export interface TeamGame {
+  id: number; date: string; league: string; same_league: boolean;
+  home: string; away: string; home_id: number; away_id: number;
+  ft: [number, number]; ht: [number, number];
+  result: "G" | "E" | "P" | null; hit: boolean | null; in_sample: boolean;
+}
+export interface TeamMatchesResponse {
+  match: { id: number; home: string; away: string; home_id: number; away_id: number; league: string; kickoff: string };
+  market: Market;
+  scope: "league" | "all";
+  can_all: boolean;
+  home: TeamGame[];
+  away: TeamGame[];
+  h2h: TeamGame[];
+}
 export interface OddsResponse { bookmakers: string[]; rows: { market: Market; prices: Record<string, number | null>; best: number | null }[] }
 export interface Preset { id: number; name: string; config: PresetConfig }
 export interface PresetConfig {

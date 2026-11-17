@@ -145,3 +145,8 @@ img.flag { width: 18px; height: 13px; object-fit: cover; vertical-align: -2px; b
 .league-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .settings-btn { margin-left: 8px; }
 .modal h4 { margin: 12px 0 6px; }
+.res { padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; }
+.res-G { background: #12361c; color: var(--pos); }
+.res-E { background: #2b2b2b; color: var(--muted); }
+.res-P { background: #3d1418; color: var(--neg); }
+tr.other-comp td { color: #b6bec8; }

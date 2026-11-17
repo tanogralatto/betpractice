@@ -155,6 +155,12 @@ export const fixturesByDate = async (day: string) => parseFixtures(await getAll(
 export const fixturesBySeason = async (league: number, season: number) =>
   parseFixtures(await getAll("/fixtures", { league, season, timezone: TZ }));
 
+/** Últimos partidos de un equipo en todas las competiciones (1 consulta). */
+export const teamLast = async (team: number, last = 40) => parseFixtures(await getAll("/fixtures", { team, last, timezone: TZ }));
+/** Enfrentamientos directos entre dos equipos (1 consulta). */
+export const headToHead = async (a: number, b: number, last = 10) =>
+  parseFixtures(await getAll("/fixtures/headtohead", { h2h: `${a}-${b}`, last, timezone: TZ }));
+
 // --- cuotas -------------------------------------------------------------------
 type Bets = Record<string, [Record<string, string>, [RegExp, string][]]>;
 const BOOKS: Record<string, string> = Object.fromEntries(Object.entries(mapping.bookmakers).map(([k, v]) => [k.toLowerCase(), v]));

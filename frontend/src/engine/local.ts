@@ -1,14 +1,16 @@
 /** API de la página: todo se calcula en el navegador con los datos del depósito (data/repo.ts). */
 import type {
+  TeamGame, TeamMatchesResponse,
   Catalog, LeagueNode, OddsResponse, Preset, PresetConfig, PrematchRequest, PrematchResponse, Row, SampleResponse, SubKind, UserProfile,
 } from "../api";
 import * as A from "./analysis";
 import { BEST, BOOKMAKERS, BOOKMAKER_KEYS, CATEGORIES, MARKETS, MARKETS_BY_KEY, STATS, STATS_BY_KEY, STREAKS, STREAKS_BY_KEY } from "./catalog";
 import { rowPasses } from "./filters";
 import { load as loadStore, newId, save } from "./store";
-import { MatchData } from "./types";
+import { FT, MatchData, finished, ga, gf } from "./types";
 import * as AF from "../data/apiFootball";
 import { Cache } from "../data/storage";
+import { h2hGames, teamGames } from "../data/repo";
 import { dayMatches, ensureLeagues, ensureOdds, history, leagueReady, loadDay, onChange, refresh, repo, setMode } from "../data/repo";
 
 export interface Meta { generated_at: string; provider: string; today: string; leagues_synced?: string[] }
@@ -192,6 +194,50 @@ async function sample(id: number, profileId: number | null, marketKey: string): 
   };
 }
 
+/** Partidos jugados de cada equipo antes del partido, y los enfrentamientos entre ellos. */
+async function teamMatches(id: number, profileId: number | null, marketKey: string, scope: "league" | "all"): Promise<TeamMatchesResponse> {
+  const m = repo.matches.get(id);
+  if (!m) throw new Error("Partido no encontrado");
+  const h = history();
+  const mk = MARKETS_BY_KEY[marketKey] ?? MARKETS_BY_KEY.ou_ht_over_0_5;
+  const ro = getProfile(profileId).real_odds_profile;
+  const inSample = new Set(ro ? A.realOddsSample(h, m, ro.sample, ro.home_as as A.Role, ro.away_as as A.Role).merged.map((x) => x.id) : []);
+  const leagueName = (lid: number, extra?: Map<number, string>) => repo.leagues.get(lid)?.name ?? extra?.get(lid) ?? "";
+  const teamName = (tid: number, extra?: Map<number, string>) => repo.teams.get(tid) ?? extra?.get(tid) ?? "?";
+  const before = (x: MatchData) => finished(x) && x.kickoff < m.kickoff && x.id !== m.id;
+  const fmt = (list: MatchData[], team: number | null, ex?: { leagues: Map<number, string>; teams: Map<number, string> }) =>
+    list.filter(before).sort((a, b) => b.kickoff.localeCompare(a.kickoff)).map((x) => {
+      const f = x as FT;
+      const res: TeamGame["result"] = team === null ? null : gf(f, team) > ga(f, team) ? "G" : gf(f, team) === ga(f, team) ? "E" : "P";
+      const ok = !(mk.needs === "goals" && x.detail === false) && !(mk.needs === "corners" && x.hc === null);
+      return {
+        id: x.id, date: x.kickoff, league: leagueName(x.leagueId, ex?.leagues), same_league: x.leagueId === m.leagueId,
+        home: teamName(x.homeId, ex?.teams), away: teamName(x.awayId, ex?.teams), home_id: x.homeId, away_id: x.awayId,
+        ft: [f.hg, f.ag] as [number, number], ht: [f.hthg, f.htag] as [number, number], result: res,
+        hit: ok ? mk.check(f) : null, in_sample: inSample.has(x.id),
+      };
+    });
+
+  const fromHistory = (team: number) => h.teamMatches(m.leagueId, team, m.kickoff, "both", null);
+  let home, away, h2h;
+  if (scope === "all" && repo.mode === "api") {
+    const [th, ta, hh] = await Promise.all([teamGames(m.homeId), teamGames(m.awayId), h2hGames(m.homeId, m.awayId)]);
+    home = fmt(th.matches, m.homeId, th);
+    away = fmt(ta.matches, m.awayId, ta);
+    h2h = fmt(hh.matches, null, hh);
+  } else {
+    home = fmt(fromHistory(m.homeId), m.homeId);
+    away = fmt(fromHistory(m.awayId), m.awayId);
+    h2h = fmt(fromHistory(m.homeId).filter((x) => x.homeId === m.awayId || x.awayId === m.awayId), null);
+  }
+  const { check, needs, ...market } = mk;
+  return {
+    match: { id, home: teamName(m.homeId), away: teamName(m.awayId), home_id: m.homeId, away_id: m.awayId,
+      league: leagueName(m.leagueId), kickoff: m.kickoff },
+    market, scope: repo.mode === "api" ? scope : "league", can_all: repo.mode === "api", home, away, h2h,
+  };
+}
+
 async function odds(id: number, markets: string[]): Promise<OddsResponse> {
   const om = repo.odds[id] ?? {};
   const keys = markets.length ? markets : MARKETS.map((m) => m.key).filter((k) => om[k]);
@@ -308,6 +354,7 @@ export const localApi = {
   },
   prematch,
   sample,
+  teamMatches,
   odds,
   presets: () => ok([...loadStore().presets].sort((a, b) => a.name.localeCompare(b.name))),
   savePreset: (name: string, config: PresetConfig) => {
