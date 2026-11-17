@@ -200,6 +200,34 @@ export function ensureOdds(day: string, leagueIds: number[]): void {
   }
 }
 
+// --- api: partidos de un equipo (todas las competiciones) y H2H ----------------------------
+// No se mezclan con el historial de la cuota real: solo se muestran en "Partidos".
+export interface Extra { matches: MatchData[]; leagues: Map<number, string>; teams: Map<number, string> }
+const extraPromises = new Map<string, Promise<Extra>>();
+function extra(k: string, ttl: number, fetcher: () => Promise<AF.FixturePack>): Promise<Extra> {
+  if (extraPromises.has(k)) return extraPromises.get(k)!;
+  const p = (async () => {
+    let pack = await Cache.get<AF.FixturePack>(k, ttl);
+    if (!pack) {
+      pack = await fetcher();
+      await Cache.set(k, pack);
+    }
+    return {
+      matches: pack.matches,
+      leagues: new Map(pack.leagues.map((l) => [l.id, l.name])),
+      teams: new Map(pack.teams.map((t) => [t.id, t.name])),
+    };
+  })();
+  extraPromises.set(k, p);
+  p.catch(() => extraPromises.delete(k));
+  return p;
+}
+export const teamGames = (team: number) => extra(`team:${team}`, 6 * H, () => AF.teamLast(team));
+export const h2hGames = (a: number, b: number) => {
+  const [x, y] = [a, b].sort((m, n) => m - n);
+  return extra(`h2h:${x}-${y}`, 12 * H, () => AF.headToHead(x, y));
+};
+
 /** Vuelve a pedir el día y sus cuotas (botón Actualizar). */
 export async function refresh(day: string): Promise<void> {
   if (repo.mode !== "api") return;
@@ -216,6 +244,6 @@ export function setMode(m: Mode) {
   repo.mode = m;
   repo.matches.clear(); repo.leagues.clear(); repo.teams.clear(); repo.odds = {};
   repo.seasonsLoaded.clear(); repo.currentSeason.clear(); repo.failed.clear(); repo.errors = [];
-  dayPromises.clear(); seasonPromises.clear(); oddsPromises.clear(); demoLoaded = null;
+  dayPromises.clear(); seasonPromises.clear(); oddsPromises.clear(); extraPromises.clear(); demoLoaded = null;
   changed();
 }

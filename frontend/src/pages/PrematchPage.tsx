@@ -3,7 +3,7 @@ import { api, Catalog, Filters, LeagueNode, Preset, PrematchResponse, Row, UserP
 import { CheckList, LeagueTree, Section } from "../components/common";
 import FiltersDialog, { countFilters } from "../components/FiltersDialog";
 import MarketPicker from "../components/MarketPicker";
-import { OddsModal, SampleModal } from "../components/MatchModals";
+import { OddsModal, SampleModal, TeamMatchesModal } from "../components/MatchModals";
 import Flag from "../components/Flag";
 
 const today = () => new Date().toLocaleDateString("en-CA");
@@ -46,6 +46,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   useEffect(() => setLoadAll(false), [date]);
   const [sampleRow, setSampleRow] = useState<Row | null>(null);
   const [oddsRow, setOddsRow] = useState<Row | null>(null);
+  const [teamsRow, setTeamsRow] = useState<Row | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [presetName, setPresetName] = useState("");
   const [presetSel, setPresetSel] = useState<number | "">("");
@@ -253,6 +254,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
                       <td key={k + "v"} className="c">{r.streaks[k]?.away ?? "—"}</td>,
                     ])}
                     <td className="actions">
+                      <button title="Partidos jugados de cada equipo" onClick={() => setTeamsRow(r)}>Partidos</button>
                       <button title="Ver muestra" onClick={() => setSampleRow(r)}>Muestra</button>
                       <button title="Cuotas de todas las casas" onClick={() => setOddsRow(r)}>Cuotas</button>
                     </td>
@@ -270,6 +272,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
           onApply={setFilters} onClose={() => setShowFilters(false)} />
       )}
       {sampleRow && <SampleModal row={sampleRow} markets={markets} profileId={profileId} catalog={catalog} onClose={() => setSampleRow(null)} />}
+      {teamsRow && <TeamMatchesModal row={teamsRow} markets={markets} profileId={profileId} catalog={catalog} onClose={() => setTeamsRow(null)} />}
       {oddsRow && <OddsModal row={oddsRow} markets={markets} catalog={catalog} onClose={() => setOddsRow(null)} />}
     </div>
   );
