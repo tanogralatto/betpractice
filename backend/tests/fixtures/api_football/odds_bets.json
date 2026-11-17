@@ -1,0 +1,2 @@
+{"get": "odds/bets", "errors": [], "results": 4, "paging": {"current": 1, "total": 1},
+ "response": [{"id": 1, "name": "Match Winner"}, {"id": 6, "name": "Goals Over/Under First Half"}, {"id": 4, "name": "Asian Handicap"}, {"id": 99, "name": "Player to be Booked"}]}

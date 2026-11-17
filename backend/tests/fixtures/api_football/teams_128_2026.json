@@ -1,0 +1,6 @@
+{"get": "teams", "errors": [], "results": 3, "paging": {"current": 1, "total": 1},
+ "response": [
+  {"team": {"id": 451, "name": "Boca Juniors", "country": "Argentina", "logo": "https://media.api-sports.io/football/teams/451.png"}, "venue": {}},
+  {"team": {"id": 435, "name": "River Plate", "country": "Argentina", "logo": "https://media.api-sports.io/football/teams/435.png"}, "venue": {}},
+  {"team": {"id": 436, "name": "Racing Club", "country": "Argentina", "logo": "https://media.api-sports.io/football/teams/436.png"}, "venue": {}}
+ ]}
