@@ -164,3 +164,17 @@ manteniendo el `seed` como alternativa para desarrollo y tests.
   `/fixtures/events` y `/fixtures/statistics`.
 - API-Football normalmente no informa “ataques peligrosos”: con ese proveedor la estadística
   queda vacía.
+
+## Publicación en GitHub Pages (cambio de plan 2)
+
+La app se usa como una página publicada por GitHub Pages, sin servidor:
+
+- El cálculo (cuota real, PPG, estadísticas, rachas, filtros) corre en el navegador
+  (`frontend/src/engine/`), con el mismo algoritmo y catálogo que `backend/app/`. Se verificó
+  que ambos den resultados idénticos sobre los mismos datos.
+- Los perfiles, sub-perfiles y presets se guardan en el navegador (localStorage).
+- Los datos salen de `data/datos.json`, generado por `python -m app.export_static`.
+- La actualización de datos es **manual**: acción de GitHub “Actualizar datos y publicar”
+  (botón “Run workflow”). Sincroniza API-Football con la clave del secreto `API_FOOTBALL_KEY`
+  y guarda la base en la rama `datos` para que la próxima vez sea incremental. Más adelante se
+  puede programar para que corra sola.

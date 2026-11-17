@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, Catalog, LeagueNode, UserProfile } from "./api";
+import { api, Catalog, LeagueNode, Meta, UserProfile } from "./api";
 import PrematchPage from "./pages/PrematchPage";
 import ProfilePage from "./pages/ProfilePage";
 
 type Tab = "prematch" | "profile";
+
+// Link a la acción de GitHub que actualiza los datos (lo completa la publicación automática).
+const UPDATE_URL = import.meta.env.VITE_UPDATE_URL as string | undefined;
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("prematch");
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [leagues, setLeagues] = useState<LeagueNode[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [provider, setProvider] = useState("");
+  const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState("");
 
   const reloadProfiles = useCallback(async () => setProfiles(await api.profiles()), []);
 
   useEffect(() => {
-    Promise.all([api.catalog(), api.leagues(), api.profiles(), api.health()])
-      .then(([c, l, p, h]) => { setCatalog(c); setLeagues(l); setProfiles(p); setProvider(h.provider); })
-      .catch((e) => setError(`No se pudo conectar con el backend (${e.message}). ¿Está corriendo en el puerto 8000?`));
+    Promise.all([api.catalog(), api.leagues(), api.profiles(), api.meta()])
+      .then(([c, l, p, m]) => { setCatalog(c); setLeagues(l); setProfiles(p); setMeta(m); })
+      .catch((e) => setError(`No se pudieron cargar los datos: ${e.message}`));
   }, []);
 
   const active = profiles.find((p) => p.is_active);
@@ -33,7 +36,13 @@ export default function App() {
         </nav>
         <div className="muted small">
           {active && <>Perfil activo: <b>{active.name}</b></>}
-          {provider && <span className="tag">datos: {provider === "api_football" ? "API-Football" : "prueba (seed)"}</span>}
+          {meta && (
+            <span className="tag" title={meta.leagues_synced?.join("\n")}>
+              {meta.provider === "api_football" ? "Datos reales (API-Football)" : "Datos de prueba"} · actualizados{" "}
+              {new Date(meta.generated_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          {UPDATE_URL && <a className="tag link-tag" href={UPDATE_URL} target="_blank" rel="noreferrer">↻ Actualizar datos</a>}
         </div>
       </header>
       {error && <div className="error">{error}</div>}

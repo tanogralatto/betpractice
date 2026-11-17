@@ -33,6 +33,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false); // solo en celular
   const [sampleRow, setSampleRow] = useState<Row | null>(null);
   const [oddsRow, setOddsRow] = useState<Row | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -96,7 +97,10 @@ export default function PrematchPage({ catalog, leagues: tree, profiles }: { cat
       </div>
 
       <div className="layout">
-        <aside className="sidebar">
+        <button className="mobile-only block" onClick={() => setPanelOpen(!panelOpen)}>
+          {panelOpen ? "▴ Ocultar opciones" : "⚙ Opciones: mercados, filtros, perfil…"}
+        </button>
+        <aside className={`sidebar ${panelOpen ? "open" : ""}`}>
           <Section title="Ligas" open={false}><LeagueTree tree={tree} value={leagues} onChange={setLeagues} /></Section>
           <Section title={`Mercados (${markets.length})`}>
             <MarketPicker catalog={catalog} value={markets} onChange={setMarkets} favorites={profile.fav_markets} />
