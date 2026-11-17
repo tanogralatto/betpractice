@@ -18,7 +18,7 @@ on:
         required: true
       dias:
         description: "Cuántos días de partidos y cuotas bajar desde hoy"
-        default: "2"
+        default: "7"
         required: true
   push:
     branches: [main]
@@ -39,7 +39,7 @@ jobs:
       TZ: America/Argentina/Buenos_Aires
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       LIGAS: ${{ inputs.ligas || '128,39' }}
-      DIAS: ${{ inputs.dias || '2' }}
+      DIAS: ${{ inputs.dias || '7' }}
     steps:
       - uses: actions/checkout@v4
 

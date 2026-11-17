@@ -11,8 +11,17 @@ const shift = (d: string, n: number) => {
   x.setDate(x.getDate() + n);
   return x.toLocaleDateString("en-CA");
 };
-const flag = (code: string | null) =>
-  code && code.length === 2 && code !== "EU" ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : "🌍";
+const SUBFLAGS: Record<string, string> = {
+  "GB-ENG": "🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
+  "GB-SCT": "🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+  "GB-WLS": "🏴\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}",
+};
+const flag = (code: string | null) => {
+  if (!code) return "🌍";
+  if (SUBFLAGS[code.toUpperCase()]) return SUBFLAGS[code.toUpperCase()];
+  const c = code.slice(0, 2).toUpperCase();
+  return /^[A-Z]{2}$/.test(c) && c !== "EU" ? String.fromCodePoint(...[...c].map((x) => 127397 + x.charCodeAt(0))) : "🌍";
+};
 const fmt = (v: number | null | undefined, d = 2) => (v === null || v === undefined ? "—" : v.toFixed(d));
 
 export default function PrematchPage({ catalog, leagues: tree, profiles }: { catalog: Catalog; leagues: LeagueNode[]; profiles: UserProfile[] }) {

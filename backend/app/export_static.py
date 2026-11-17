@@ -21,6 +21,15 @@ from app.db import SessionLocal, init_db
 from app.models import GoalEvent, League, Match, Odds, Season, Team
 
 DEFAULT_OUT = config.BASE_DIR.parent / "frontend" / "public" / "data" / "datos.json"
+# Nombres de países en español (API-Football los devuelve en inglés)
+COUNTRY_ES = {
+    "England": "Inglaterra", "Spain": "España", "Italy": "Italia", "Germany": "Alemania", "France": "Francia",
+    "Netherlands": "Países Bajos", "Belgium": "Bélgica", "Brazil": "Brasil", "Scotland": "Escocia", "Wales": "Gales",
+    "Turkey": "Turquía", "Greece": "Grecia", "Switzerland": "Suiza", "Denmark": "Dinamarca", "Sweden": "Suecia",
+    "Norway": "Noruega", "Poland": "Polonia", "Mexico": "México", "USA": "Estados Unidos", "Japan": "Japón",
+    "World": "Mundo", "Peru": "Perú", "Czech-Republic": "República Checa", "Croatia": "Croacia", "Austria": "Austria",
+}
+
 COLS = ("hg", "ag", "hthg", "htag", "home_corners", "away_corners", "home_shots", "away_shots",
         "home_sot", "away_sot", "home_dangerous", "away_dangerous", "home_yellow", "away_yellow")
 
@@ -63,9 +72,9 @@ def export(out: Path, today: date | None = None) -> dict:
                 "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "provider": config.DATA_PROVIDER,
                 "today": today.isoformat(),
-                "leagues_synced": [f"{lg.country} · {lg.name}" for lg in leagues],
+                "leagues_synced": [f"{COUNTRY_ES.get(lg.country, lg.country)} · {lg.name}" for lg in leagues],
             },
-            "leagues": [[lg.id, lg.name, lg.country, lg.country_code] for lg in leagues],
+            "leagues": [[lg.id, lg.name, COUNTRY_ES.get(lg.country, lg.country), lg.country_code] for lg in leagues],
             "seasons": [[s.id, s.league_id, s.year, s.name] for s in db.scalars(select(Season))],
             "teams": {str(t.id): t.name for t in db.scalars(select(Team)) if t.id in team_ids},
             "matches": matches,
