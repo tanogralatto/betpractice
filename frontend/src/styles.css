@@ -121,10 +121,21 @@ legend { padding: 0 6px; font-weight: 600; }
 .form { display: flex; flex-direction: column; gap: 8px; }
 .form label { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 8px; }
 
+.mobile-only { display: none; }
 @media (max-width: 900px) {
-  .layout, .profile-page { flex-direction: column; }
+  .layout, .profile-page { flex-direction: column; align-items: stretch; }
   .sidebar { width: 100%; min-height: 0; border-right: none; }
+  .layout > .sidebar { display: none; }
+  .layout > .sidebar.open { display: block; }
+  .mobile-only { display: block; margin: 8px 12px 0; width: calc(100% - 24px); }
+  .topnav { flex-wrap: wrap; gap: 8px 16px; padding: 8px 12px; }
+  .topnav > .muted { margin-left: 0; width: 100%; }
+  .datebar { padding: 8px 12px; }
+  .chips { margin-left: 0; }
+  .content { padding: 8px 12px; }
   .cols { grid-template-columns: 1fr; }
 }
 .sub-table { overflow-x: auto; }
 .grid td.wrap { white-space: normal; min-width: 140px; }
+a.link-tag { color: var(--accent); text-decoration: none; border-color: var(--accent); }
+a.link-tag:hover { background: #0d2a3d; }

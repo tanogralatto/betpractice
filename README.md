@@ -1,51 +1,79 @@
 # Cuotas reales · Estadísticas de fútbol para apuestas
 
-App propia para analizar partidos de fútbol con **cuotas reales** calculadas a partir de
-muestras históricas configurables, pensada sobre todo para el mercado **Over 0.5 goles en el
-1er tiempo**. Tiene dos secciones:
+App para analizar partidos de fútbol con **cuotas reales** calculadas a partir de partidos
+anteriores, pensada sobre todo para el mercado **Over 0.5 goles en el 1er tiempo**.
 
-- **Perfil**: perfiles de usuario (uno activo) formados por 4 sub-perfiles reutilizables
-  (cuota real, PPG, estadísticas, rachas) y favoritos (ligas, mercados, estadísticas, rachas,
-  casas de apuestas).
-- **Pre partido**: tabla de partidos del día con cuota real, cuota de la casa y valor %,
-  estadísticas L/V/AVG, rachas, filtros por rango, presets, la muestra usada y las cuotas de
-  todas las casas.
+- **Perfil**: elegís cómo se calcula la cuota real (cuántos partidos anteriores, de local,
+  de visitante o ambos) y tus favoritos.
+- **Pre partido**: los partidos del día con cuota real, cuota de la casa y valor
+  (verde = conviene, rojo = no), estadísticas, rachas y filtros.
 
-La especificación completa está en [`docs/especificacion.md`](docs/especificacion.md).
+## Cómo se usa (sin instalar nada)
 
-## Abrir la app en tu computadora (lo más fácil)
+La app es una página web publicada por GitHub, como cualquier otra:
+**https://tanogralatto.github.io/betpractice/**
 
-1. Instalá **Python** desde https://www.python.org/downloads/ (en Windows marcá la casilla
-   **“Add python.exe to PATH”** en la primera pantalla del instalador).
-2. Instalá **Node.js** desde https://nodejs.org (botón **LTS**).
-3. Bajá este proyecto: botón verde **Code → Download ZIP** en GitHub, y descomprimilo.
-4. Doble clic en:
-   - Windows: **`iniciar-windows.bat`**
-   - Mac: **`iniciar-mac.command`** (la primera vez: clic derecho → **Abrir** → **Abrir**).
+Todo se calcula en tu navegador. Tus perfiles y presets quedan guardados en ese navegador.
 
-La primera vez tarda unos minutos porque instala lo necesario. Después se abre el navegador
-en http://localhost:5173. Para cerrar la app, cerrá la ventana negra.
+### Actualizar los datos (a mano)
 
-## Estructura
+1. En GitHub entrá a la pestaña **Actions**.
+2. A la izquierda elegí **“Actualizar datos y publicar”**.
+3. Tocá **“Run workflow”**. Podés cambiar las ligas y los días, y después tocá el botón verde
+   **“Run workflow”**.
+4. En unos minutos la página muestra los datos nuevos. Arriba a la derecha dice cuándo se
+   actualizaron.
+
+En la misma página hay un acceso directo: **“↻ Actualizar datos”**.
+
+Las ligas se indican con el número que usa API-Football: **128** = Argentina Liga Profesional,
+**39** = Premier League, 140 = LaLiga, 135 = Serie A, 5 = Nations League.
+
+### Configuración (una sola vez)
+
+1. **Publicar la página:** Settings → Pages → en “Source” elegí **GitHub Actions**.
+2. **Rama principal:** Settings → General → “Default branch” → elegí **main**.
+3. **Clave de API-Football:** Settings → Secrets and variables → Actions → **New repository
+   secret** → Name: `API_FOOTBALL_KEY`, Secret: tu clave. Queda oculta: nadie la puede ver,
+   ni siquiera vos después de guardarla. Mientras no esté cargada, la página muestra **datos de prueba**.
+
+---
+
+## Parte técnica
+
+### Estructura
 
 ```
-backend/                FastAPI + SQLAlchemy
+.github/workflows/      actualizar datos + publicar en Pages; tests
+backend/                Python: sincronización con API-Football, seed, exportación, API de desarrollo
   app/catalog/          mercados, estadísticas, rachas, casas
   app/services/         cálculo (analysis.py), filtros, Pre partido, sincronización
   app/providers/        interfaz de proveedores + API-Football (+ mapeo de cuotas en JSON)
   app/seed.py           datos de prueba
   app/sync.py           comando de sincronización
   tests/                pytest (incluye respuestas simuladas de API-Football)
+  app/export_static.py  base → frontend/public/data/datos.json
 frontend/               React + Vite + TypeScript (tema oscuro)
+  src/engine/           motor de cálculo en el navegador (mismo algoritmo que backend/app/services)
 docs/especificacion.md
 ```
 
-## Requisitos
+### Cómo funciona la publicación
+
+La página no tiene servidor. La acción **Actualizar datos y publicar** hace lo siguiente:
+1. Recupera la base SQLite guardada en la rama `datos`.
+2. Sincroniza con API-Football en forma incremental (solo con el botón manual).
+3. Exporta `datos.json`.
+4. Arma la página y la publica en GitHub Pages.
+
+Cada push a `main` vuelve a publicar con los datos guardados, sin pedir nada a la API.
+
+### Requisitos
 
 - Python 3.12+
 - Node.js 18+
 
-## Puesta en marcha con datos de prueba (`seed`)
+### Desarrollo local con datos de prueba (`seed`)
 
 ```bash
 cd backend
@@ -64,30 +92,28 @@ python -m app.seed
 ```
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+python -m app.export_static
 ```
-
-En otra terminal:
 
 ```bash
-cd frontend && npm install && npm run dev
+cd ../frontend && npm install && npm run dev
 ```
 
-Abrí http://localhost:5173. El frontend reenvía `/api` al backend en el puerto 8000
-(se puede cambiar con `VITE_API_URL`).
+Abrí http://localhost:5173. (El backend FastAPI, `uvicorn app.main:app`, sigue disponible para
+desarrollo y expone la misma lógica en `/api`, pero la página no lo necesita.)
 
 El seed genera 6 ligas (Argentina, Inglaterra, España, Italia, Nations League, Chile B),
 3 temporadas, ~4.700 partidos terminados (≈72 % con gol en el 1T) y partidos de los últimos
 3 días, hoy y los próximos 6 días con cuotas de Bet365, Pinnacle y 1xBet. Opciones:
 `python -m app.seed --date 2026-11-17 --seed 7`.
 
-## Datos reales con API-Football
+### Datos reales con API-Football (local)
 
 La app **siempre lee de la base de datos**; el proveedor solo la llena. Con
 `DATA_PROVIDER=api_football` se usa por defecto otra base (`backend/betpractice_api_football.db`),
 así el seed nunca pisa los datos reales.
 
-### 1. Poner la clave
+#### 1. Poner la clave
 
 Copiá el ejemplo y completá la clave (la sacás del dashboard de api-football.com):
 
@@ -105,7 +131,7 @@ API_FOOTBALL_KEY=tu_clave
 `.env` está en `.gitignore`: la clave nunca se commitea. También se puede exportar como
 variable de entorno (`export API_FOOTBALL_KEY=...`).
 
-### 2. Sincronizar ligas
+#### 2. Sincronizar ligas
 
 Los ids son los de API-Football: **128** = Argentina Liga Profesional, **39** = Inglaterra
 Premier League (otros: 140 LaLiga, 135 Serie A, 5 Nations League; verificalos en
@@ -138,17 +164,15 @@ python -m app.sync check-mapping
 `details` completa goles/estadísticas pendientes y `check-mapping` consulta `/odds/bookmakers`
 y `/odds/bets` y muestra qué casas y tipos de apuesta no están mapeados.
 
-### 3. Correr la app con API-Football
+#### 3. Exportar y ver
 
 ```bash
-cd backend && DATA_PROVIDER=api_football uvicorn app.main:app --reload --port 8000
+cd backend && DATA_PROVIDER=api_football python -m app.export_static
 ```
 
-(si `DATA_PROVIDER` ya está en `backend/.env` no hace falta ponerlo en el comando). La barra
-superior muestra “datos: API-Football”. Para tener los partidos del día al día, programá
-`python -m app.sync daily` (por ejemplo con cron cada 1–2 horas).
+Después `npm run dev` en `frontend/`. La barra superior muestra “Datos reales (API-Football)”.
 
-### Cuota de pedidos y caché
+#### Cuota de pedidos y caché
 
 - Se leen los headers `x-ratelimit-requests-remaining` (diaria) y `X-RateLimit-Remaining`
   (por minuto). Si se agota la del minuto se espera 60 s; si la diaria baja de
@@ -159,7 +183,7 @@ superior muestra “datos: API-Football”. Para tener los partidos del día al 
   piden para partidos terminados que todavía no los tienen (de a 20 por pedido) y una temporada
   pasada que ya está completa se saltea (forzar con `--force`).
 
-### Mapeo de cuotas
+#### Mapeo de cuotas
 
 `backend/app/providers/api_football_mapping.json` traduce casas (`Bet365`, `Pinnacle`, `1xBet`)
 y tipos de apuesta (`Match Winner`, `Goals Over/Under`, `Goals Over/Under First Half`,
@@ -167,7 +191,7 @@ y tipos de apuesta (`Match Winner`, `Goals Over/Under`, `Goals Over/Under First 
 las claves del catálogo. Admite comodines (`Over {line}` → `ou_over_{k}`, `{h}:{a}` → `cs_{h}{a}`).
 Lo que no se puede mapear se informa en el log al final de cada sync de cuotas.
 
-## Tests
+### Tests
 
 ```bash
 cd backend && python -m pytest -q
@@ -180,7 +204,7 @@ cliente de API-Football con respuestas simuladas (cuota, reintentos, caché, pag
 goles y estadísticas, mapeo de cuotas y sincronización idempotente). Ningún test hace llamadas
 reales.
 
-## Cómo se calcula la cuota real
+### Cómo se calcula la cuota real
 
 1. Muestra del local: sus partidos terminados **en la misma competición**, en la ventana de
    temporadas del perfil y **anteriores** al partido, filtrados por “Local como” (`last_8`: los
@@ -190,7 +214,7 @@ reales.
 4. p = aciertos / n → cuota real = 1/p.
 5. Valor % = cuota de la casa / cuota real − 1.
 
-## PostgreSQL
+### PostgreSQL
 
 Instalá `psycopg[binary]` y definí `DATABASE_URL=postgresql+psycopg://usuario:clave@host/base`.
 Las tablas se crean solas al iniciar el backend (o con el seed).

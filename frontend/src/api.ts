@@ -104,44 +104,10 @@ export interface PresetConfig {
   bookmaker: string; hide_without_odds: boolean; sort: string; filters: Filters;
 }
 
-async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const r = await fetch(url, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!r.ok) {
-    let msg = `${r.status}`;
-    try {
-      const j = await r.json();
-      msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
-    } catch { /* sin cuerpo */ }
-    throw new Error(msg);
-  }
-  return r.json();
-}
-
-export const api = {
-  catalog: () => req<Catalog>("GET", "/api/catalog"),
-  leagues: () => req<LeagueNode[]>("GET", "/api/leagues"),
-  health: () => req<{ ok: boolean; provider: string }>("GET", "/api/health"),
-  profiles: () => req<UserProfile[]>("GET", "/api/profiles"),
-  createProfile: (b: Partial<UserProfile>) => req<UserProfile>("POST", "/api/profiles", b),
-  saveProfile: (id: number, b: Partial<UserProfile>) => req<UserProfile>("PUT", `/api/profiles/${id}`, b),
-  activateProfile: (id: number) => req<UserProfile>("POST", `/api/profiles/${id}/activate`),
-  deleteProfile: (id: number) => req<unknown>("DELETE", `/api/profiles/${id}`),
-  subprofiles: <T,>(k: SubKind) => req<T[]>("GET", `/api/subprofiles/${k}`),
-  createSub: <T,>(k: SubKind, b: unknown) => req<T>("POST", `/api/subprofiles/${k}`, b),
-  updateSub: <T,>(k: SubKind, id: number, b: unknown) => req<T>("PUT", `/api/subprofiles/${k}/${id}`, b),
-  deleteSub: (k: SubKind, id: number) => req<unknown>("DELETE", `/api/subprofiles/${k}/${id}`),
-  prematch: (b: PrematchRequest) => req<PrematchResponse>("POST", "/api/prematch", b),
-  sample: (id: number, profileId: number | null, market: string) =>
-    req<SampleResponse>("GET", `/api/matches/${id}/sample?market=${market}${profileId ? `&profile_id=${profileId}` : ""}`),
-  odds: (id: number, markets: string[]) => req<OddsResponse>("GET", `/api/matches/${id}/odds?markets=${markets.join(",")}`),
-  presets: () => req<Preset[]>("GET", "/api/presets"),
-  savePreset: (name: string, config: PresetConfig) => req<Preset>("POST", "/api/presets", { name, config }),
-  deletePreset: (id: number) => req<unknown>("DELETE", `/api/presets/${id}`),
-};
+// Toda la lógica corre en el navegador: los datos salen de public/data/datos.json
+// (lo genera la acción "Actualizar datos" de GitHub o `python -m app.export_static`).
+export { localApi as api } from "./engine/local";
+export type { Meta } from "./engine/local";
 
 export const ROLE_LABEL: Record<string, string> = { home: "Local", away: "Visitante", both: "Ambos", ignore: "Ignorar" };
 export const SEASONS_LABEL: Record<string, string> = {

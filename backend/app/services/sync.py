@@ -159,8 +159,11 @@ class Syncer:
                 self.report.skipped.append(f"{lg.name} {year}")
                 continue
             log.info("Sincronizando %s %s…", lg.name, year)
-            for t in self.p.get_teams(league_api_id, year):
-                self.upsert_team(t)
+            se = self.db.scalar(select(Season).where(Season.league_id == lg.id, Season.year == year))
+            has_matches = se is not None and self.db.scalar(select(Match.id).where(Match.season_id == se.id).limit(1))
+            if not has_matches:  # los equipos solo se piden la primera vez (después vienen con los partidos)
+                for t in self.p.get_teams(league_api_id, year):
+                    self.upsert_team(t)
             for fx in self.p.get_fixtures(league_api_id, year):
                 self.upsert_fixture(fx, lg)
             self.db.commit()
