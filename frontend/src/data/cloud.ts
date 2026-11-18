@@ -161,3 +161,47 @@ export async function setUserAccess(uid: string, on: boolean): Promise<void> {
   const { db, F } = await load();
   await F.updateDoc(F.doc(db, "acceso_tanoapp", uid), { cuotasreales: on, cuotasDecidido: F.serverTimestamp() });
 }
+
+// --- Alertas de Telegram (solo lectura) ------------------------------------------------------
+// Las guarda el programa de alertas de la otra app cuando la cuota en vivo de +0,5 1T llega al
+// mínimo (1,50). Acá SOLO se leen: nunca se crean, cambian ni borran. Las pueden leer el dueño y
+// las personas aprobadas en la otra app (reglas actuales de Firebase).
+export interface TgAlert {
+  odd: number | null; minute: number | null; result: "won" | "lost" | "push" | "pending";
+  estimated: boolean; doubtful: boolean; manual: boolean; group: string | null;
+}
+
+/** Devuelve, por id de partido, la alerta de +0,5 1T (o null si no hubo). null si no hay permiso. */
+export async function fetchTelegramAlerts(ids: number[]): Promise<Map<number, TgAlert | null> | null> {
+  if (!cloud.user || !ids.length) return null;
+  const { db, F } = await load();
+  const out = new Map<number, TgAlert | null>(ids.map((id) => [id, null]));
+  try {
+    for (let i = 0; i < ids.length; i += 30) {
+      const snap = await F.getDocs(F.query(F.collection(db, "tanoapp_telegram_alerts"), F.where("fixture_id", "in", ids.slice(i, i + 30))));
+      const best = new Map<number, { a: any; t: number }>();
+      for (const d of snap.docs) {
+        const a = d.data();
+        if (a.market_type !== "over05" || a.hidden === true) continue;
+        const id = Number(a.fixture_id), t = a.created_at?.toMillis?.() ?? 0;
+        const prev = best.get(id);
+        // si hay varias (grupos distintos), se toma la primera que salió
+        if (!prev || t < prev.t) best.set(id, { a, t });
+      }
+      for (const [id, { a }] of best) {
+        const odd = Number(a.entry_odd ?? a.odd);
+        const r = String(a.result_status ?? "pending");
+        out.set(id, {
+          odd: Number.isFinite(odd) && odd > 1 ? odd : null,
+          minute: Number.isFinite(Number(a.minute)) ? Number(a.minute) : null,
+          result: (["won", "lost", "push"].includes(r) ? r : "pending") as TgAlert["result"],
+          estimated: !!(a.entry_estimated || a.odd_estimated), doubtful: !!a.entry_doubtful, manual: !!a.manual,
+          group: a.favorite_group ?? null,
+        });
+      }
+    }
+    return out;
+  } catch {
+    return null; // sin permiso (no aprobado en la otra app) o sin conexión
+  }
+}

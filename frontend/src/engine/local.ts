@@ -10,6 +10,7 @@ import { load as loadStore, newId, save } from "./store";
 import { FT, MatchData, finished, ga, gf } from "./types";
 import * as AF from "../data/apiFootball";
 import { Cache } from "../data/storage";
+import { cloud, fetchTelegramAlerts } from "../data/cloud";
 import { h2hGames, teamGames } from "../data/repo";
 import { warmFromCache } from "../data/repo";
 import { LS } from "../data/storage";
@@ -254,6 +255,9 @@ export interface FavSnap {
   stake?: number | null; odds_taken?: number | null;
   /** resultado guardado cuando terminó (queda en el historial aunque ya no se puedan bajar los datos) */
   result?: FavResult | null;
+  /** cruce con las alertas de Telegram (+0,5 1T): found = la cuota en vivo llegó al mínimo */
+  tg?: { checked_at: number; found: boolean; odd: number | null; minute: number | null;
+    result: "won" | "lost" | "push" | "pending" | null; doubtful: boolean; estimated: boolean } | null;
   updated_at?: number;
 }
 const FAVS = "cr:favoritos", DELETED = "cr:favoritos-borrados";
@@ -301,6 +305,39 @@ function setBet(id: number, stake: number | null, oddsTaken: number | null): voi
   saveFavs(f);
 }
 
+/** Mercado que valida el programa de alertas de Telegram. */
+export const TG_MARKET = "ou_ht_over_0_5";
+let tgChecking = false;
+/** Cruza los partidos terminados de +0,5 1T con las alertas de Telegram (solo lectura, pocas lecturas). */
+async function checkTelegram(f: Record<string, FavSnap>): Promise<void> {
+  if (repo.mode !== "api" || !cloud.user || tgChecking) return;
+  const now = Date.now(), recent = new Date(now - 3 * 864e5).toLocaleDateString("en-CA");
+  const todo = Object.values(f).filter((x) => x.result && (x.market ?? TG_MARKET) === TG_MARKET && (
+    !x.tg || // nunca se miró
+    // sin alerta o sin resultado: se vuelve a mirar cada 2 h durante 3 días (alertas cargadas a mano, resultados pendientes)
+    ((!x.tg.found || x.tg.result === "pending") && x.date >= recent && now - x.tg.checked_at > 2 * 3600_000)));
+  if (!todo.length) return;
+  tgChecking = true;
+  try {
+    const alerts = await fetchTelegramAlerts(todo.map((x) => x.id));
+    if (!alerts) return; // sin permiso: quedan "sin datos de alertas"
+    const cur = favMap();
+    for (const x of todo) {
+      if (!cur[x.id]) continue;
+      const a = alerts.get(x.id) ?? null;
+      cur[x.id] = {
+        ...cur[x.id], updated_at: now,
+        tg: { checked_at: now, found: !!a, odd: a?.odd ?? null, minute: a?.minute ?? null, result: a?.result ?? null,
+          doubtful: !!a?.doubtful, estimated: !!a?.estimated },
+      };
+    }
+    saveFavs(cur);
+  } finally {
+    tgChecking = false;
+  }
+}
+export const telegramAvailable = () => repo.mode === "api" && !!cloud.user;
+
 export interface FavoritesResponse {
   rows: Row[]; markets: string[]; stats: string[]; streaks: string[];
   saved: Record<number, FavSnap>; history: FavSnap[]; missing: FavSnap[]; loading: number;
@@ -322,6 +359,8 @@ async function favorites(): Promise<FavoritesResponse> {
     changed = true;
   }
   if (changed) saveFavs(f);
+  await checkTelegram(f);
+  Object.assign(f, favMap()); // con lo que se anotó de Telegram
 
   const p = getProfile(null);
   const markets = p.fav_markets, stats = p.fav_stats.slice(0, 3), streaks = p.fav_streaks.slice(0, 3);
@@ -468,6 +507,7 @@ export const localApi = {
   deleteFavorite,
   setBet,
   favorites,
+  telegramAvailable,
   odds,
   presets: () => ok([...loadStore().presets].sort((a, b) => a.name.localeCompare(b.name))),
   savePreset: (name: string, config: PresetConfig) => {
