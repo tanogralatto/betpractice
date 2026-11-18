@@ -245,6 +245,70 @@ async function teamMatches(id: number, profileId: number | null, marketKey: stri
   };
 }
 
+// --- Mis partidos (favoritos) ---------------------------------------------------
+export interface FavSnap {
+  id: number; date: string; kickoff: string; league: string; home: string; away: string; saved_at: string;
+  market: string | null; real: number | null; book: number | null; bookmaker: string | null; value: number | null;
+}
+const FAVS = "cr:favoritos";
+const favMap = () => LS.get<Record<string, FavSnap>>(FAVS, {});
+function favoriteIds(): Set<number> { return new Set(Object.keys(favMap()).map(Number)); }
+/** Agrega o quita un partido de Mis partidos. Al agregarlo guarda las cuotas de ese momento. */
+function toggleFavorite(r: Row, market?: string): Set<number> {
+  const f = favMap();
+  if (f[r.id]) delete f[r.id];
+  else {
+    const c = market ? r.markets[market] : undefined;
+    f[r.id] = {
+      id: r.id, date: r.kickoff.slice(0, 10), kickoff: r.kickoff, league: r.league.name, home: r.home.name, away: r.away.name,
+      saved_at: new Date().toISOString(), market: market ?? null, real: c?.real ?? null, book: c?.book ?? null,
+      bookmaker: c?.bookmaker ?? null, value: c?.value ?? null,
+    };
+  }
+  LS.set(FAVS, f);
+  return favoriteIds();
+}
+function removeFinishedFavorites(): Set<number> {
+  const f = favMap();
+  for (const id of Object.keys(f)) if (repo.matches.get(Number(id))?.status === "FT") delete f[id];
+  LS.set(FAVS, f);
+  return favoriteIds();
+}
+
+export interface FavoritesResponse {
+  rows: Row[]; markets: string[]; stats: string[]; streaks: string[];
+  saved: Record<number, FavSnap>; hits: Record<number, boolean | null>; missing: FavSnap[]; loading: number;
+}
+
+/** Partidos guardados, recalculados con el perfil activo. */
+async function favorites(): Promise<FavoritesResponse> {
+  const f = favMap();
+  const snaps = Object.values(f);
+  await Promise.all([...new Set(snaps.map((x) => x.date))].map((d) => loadDay(d).catch(() => undefined)));
+  const p = getProfile(null);
+  const markets = p.fav_markets, stats = p.fav_stats.slice(0, 3), streaks = p.fav_streaks.slice(0, 3);
+  const bookmaker = p.fav_bookmakers[0] || BEST;
+  const found = snaps.map((x) => repo.matches.get(x.id)).filter((m): m is MatchData => !!m);
+  const extra = extraSeasons(p);
+  const leagues = [...new Set(found.map((m) => m.leagueId))];
+  await warmFromCache(leagues, extra);
+  ensureLeagues(leagues.filter((l) => !leagueReady(l, extra)), extra);
+  for (const d of new Set(found.filter((m) => m.status === "NS").map((m) => m.kickoff.slice(0, 10))))
+    ensureOdds(d, [...new Set(found.filter((m) => m.kickoff.startsWith(d)).map((m) => m.leagueId))]);
+  const rows = found.map((m) => buildRow(m, p, markets, stats, streaks, bookmaker, leagueReady(m.leagueId, extra)))
+    .sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const hits: Record<number, boolean | null> = {};
+  for (const m of found) {
+    const mk = MARKETS_BY_KEY[f[m.id].market ?? markets[0]];
+    hits[m.id] = finished(m) && mk && !(mk.needs === "goals" && m.detail === false) && !(mk.needs === "corners" && m.hc === null)
+      ? mk.check(m) : null;
+  }
+  return {
+    rows, markets, stats, streaks, saved: f as unknown as Record<number, FavSnap>, hits,
+    missing: snaps.filter((x) => !repo.matches.has(x.id)), loading: repo.loading.size,
+  };
+}
+
 async function odds(id: number, markets: string[]): Promise<OddsResponse> {
   const om = repo.odds[id] ?? {};
   const keys = markets.length ? markets : MARKETS.map((m) => m.key).filter((k) => om[k]);
@@ -364,6 +428,10 @@ export const localApi = {
   prematch,
   sample,
   teamMatches,
+  favoriteIds,
+  toggleFavorite,
+  removeFinishedFavorites,
+  favorites,
   odds,
   presets: () => ok([...loadStore().presets].sort((a, b) => a.name.localeCompare(b.name))),
   savePreset: (name: string, config: PresetConfig) => {
