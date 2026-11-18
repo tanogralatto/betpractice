@@ -3,8 +3,9 @@ import Settings from "./components/Settings";
 import { api, Catalog, LeagueNode, Meta, UserProfile } from "./api";
 import PrematchPage from "./pages/PrematchPage";
 import ProfilePage from "./pages/ProfilePage";
+import FavoritesPage from "./pages/FavoritesPage";
 
-type Tab = "prematch" | "profile";
+type Tab = "prematch" | "favorites" | "profile";
 
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [favCount, setFavCount] = useState(() => api.favoriteIds().size);
   const [version, setVersion] = useState(0); // cambia al cambiar de clave o de modo
 
   const reloadProfiles = useCallback(async () => setProfiles(await api.profiles()), []);
@@ -41,6 +43,9 @@ export default function App() {
         <div className="brand">⚽ Cuotas reales</div>
         <nav>
           <button className={tab === "prematch" ? "on" : ""} onClick={() => setTab("prematch")}>Pre partido</button>
+          <button className={tab === "favorites" ? "on" : ""} onClick={() => { setFavCount(api.favoriteIds().size); setTab("favorites"); }}>
+            ★ Mis partidos{favCount > 0 && <span className="badge">{favCount}</span>}
+          </button>
           <button className={tab === "profile" ? "on" : ""} onClick={() => setTab("profile")}>Perfil</button>
         </nav>
         <div className="muted small">
@@ -55,7 +60,10 @@ export default function App() {
       </header>
       {error && <div className="error">{error}</div>}
       {catalog && profiles.length > 0 && (tab === "prematch" ? (
-        <PrematchPage key={version} catalog={catalog} leagues={leagues} profiles={profiles} openSettings={() => setShowSettings(true)} />
+        <PrematchPage key={version} catalog={catalog} leagues={leagues} profiles={profiles} openSettings={() => setShowSettings(true)}
+          onFavCount={setFavCount} />
+      ) : tab === "favorites" ? (
+        <FavoritesPage key={version} catalog={catalog} onCount={setFavCount} />
       ) : (
         <ProfilePage catalog={catalog} leagues={leagues} profiles={profiles} reload={reloadProfiles} />
       ))}

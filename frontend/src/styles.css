@@ -199,3 +199,18 @@ tr.other-comp td { color: #b6bec8; }
   .m-actions { flex: 1 1 100%; flex-direction: row; }
   .m-actions button { flex: 1; }
 }
+
+/* ---- Favoritos ---- */
+.m-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+button.star { background: none; border: none; padding: 0 2px; font-size: 20px; line-height: 1; color: var(--muted); }
+button.star:hover { color: var(--main); border: none; }
+button.star.on { color: #f5c542; }
+.m-extra { grid-column: 1 / -1; }
+.fav-extra { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 13px; }
+.fav-res { font-weight: 700; padding: 2px 10px; border-radius: 10px; }
+.fav-res.ok { background: #12361c; color: var(--pos); } .fav-res.no { background: #3d1418; color: var(--neg); }
+.favorites { padding: 12px 18px; max-width: 1600px; }
+.favorites h2 { margin: 6px 0; }
+.fav-day { color: var(--accent); font-size: 15px; margin: 18px 0 4px; }
+.fav-summary { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+@media (max-width: 900px) { .favorites { padding: 8px 12px; } .m-extra { flex: 1 1 100%; } }
