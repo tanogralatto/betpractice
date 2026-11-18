@@ -36,7 +36,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   const [showFilters, setShowFilters] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false); // solo en celular
   const [tick, setTick] = useState(0); // llegan datos nuevos (historiales, cuotas)
-  const [loadAll, setLoadAll] = useState(false);
+  const [loadAll, setLoadAll] = useState<boolean | "always">(false);
   const [refreshing, setRefreshing] = useState(false);
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
@@ -194,8 +194,13 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
           )}
           {!!data?.pending_leagues && (
             <div className="notice">
-              Hay <b>{data.pending_leagues}</b> ligas sin historial todavía. Elegí las ligas que te interesan (chips de países o panel de Ligas)
-              o <button className="link" onClick={() => setLoadAll(true)}>calculá todas</button> (≈{data.pending_calls} consultas a API-Football; después quedan guardadas).
+              Hay <b>{data.pending_leagues}</b> ligas que todavía no se bajaron. Bajarlas todas gasta ≈{data.pending_calls} consultas
+              de API-Football (una sola vez: después quedan guardadas en este dispositivo).
+              <div className="row">
+                <button onClick={() => setLoadAll(true)}>Calcular todas ahora</button>
+                <button onClick={() => setLoadAll("always")}>Calcular siempre todas (no volver a preguntar)</button>
+              </div>
+              <div className="small">O elegí tus ligas favoritas en <b>Perfil → Favoritos · Ligas</b> y tocá el chip <b>★ Favoritos</b>.</div>
             </div>
           )}
           <div className="table-wrap">
