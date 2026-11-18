@@ -15,10 +15,33 @@ const fmtShort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("es
 const money = (v: number) => (v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 const pct = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 
-/** Ganancia de un partido apostado: monto × (cuota − 1) si se cumplió, −monto si no. */
-export function profit(f: FavSnap): number | null {
-  if (!f.stake || !f.result || f.result.hit === null || f.result.hit === undefined) return null;
-  return f.result.hit ? f.stake * ((f.odds_taken ?? 1) - 1) : -f.stake;
+type Mode = "all" | "valid";
+/** Resultado y cuota según la vista: pre partido (lo guardado) o validado por Telegram (la alerta). */
+function effective(f: FavSnap, mode: Mode): { hit: boolean | null; odds: number | null } {
+  if (mode === "valid") {
+    const r = f.tg?.result;
+    return { hit: r === "won" ? true : r === "lost" ? false : null, odds: f.tg?.odd ?? 1.5 };
+  }
+  return { hit: f.result?.hit ?? null, odds: f.odds_taken ?? null };
+}
+/** Ganancia de un partido apostado: monto × (cuota − 1) si se cumplió, −monto si no (0 si fue devolución). */
+export function profit(f: FavSnap, mode: Mode = "all"): number | null {
+  if (!f.stake || !f.result) return null;
+  if (mode === "valid" && f.tg?.result === "push") return 0;
+  const { hit, odds } = effective(f, mode);
+  if (hit === null) return null;
+  return hit ? f.stake * ((odds ?? 1) - 1) : -f.stake;
+}
+
+/** Celda con la validación de Telegram. */
+function TgCell({ f }: { f: FavSnap }) {
+  if (!f.tg) return <span className="muted" title="Sin datos de alertas (no aplica a este mercado, o tu cuenta no puede leer las alertas)">—</span>;
+  if (!f.tg.found) return <span className="tg-no" title="No hubo alerta: la cuota en vivo no llegó al mínimo">No válido</span>;
+  return (
+    <span className="tg-ok" title={`Alerta de Telegram${f.tg.minute != null ? ` en el minuto ${f.tg.minute}` : ""}${f.tg.estimated ? " (estimada)" : ""}${f.tg.doubtful ? " · dudosa" : ""}`}>
+      ✅ {f.tg.odd?.toFixed(2) ?? "1.50"}{f.tg.minute != null ? ` · ${f.tg.minute}'` : ""}{f.tg.doubtful ? " ⚠" : ""}
+    </span>
+  );
 }
 
 /** Monto y cuota de la apuesta (se guarda al salir del campo). */
@@ -49,17 +72,21 @@ type Period = "7" | "30" | "all";
 
 function History({ items, catalog }: { items: FavSnap[]; catalog: Catalog }) {
   const [period, setPeriod] = useState<Period>("30");
+  const hasTg = api.telegramAvailable() || items.some((x) => x.tg);
+  const [mode, setMode] = useState<Mode>("all");
   const [onlyBets, setOnlyBets] = useState(false);
   const mName = (k: string | null) => catalog.markets.find((m) => m.key === k)?.name ?? k ?? "";
   const since = period === "all" ? "" : new Date(Date.now() - Number(period) * 864e5).toLocaleDateString("en-CA");
-  const list = items.filter((x) => (!since || x.date >= since) && (!onlyBets || (x.stake ?? 0) > 0));
+  const inPeriod = items.filter((x) => (!since || x.date >= since) && (!onlyBets || (x.stake ?? 0) > 0));
+  const list = mode === "valid" ? inPeriod.filter((x) => x.tg?.found) : inPeriod;
+  const invalid = inPeriod.filter((x) => x.tg && !x.tg.found).length;
 
   const summarize = (xs: FavSnap[]) => {
-    const known = xs.filter((x) => x.result?.hit !== null && x.result?.hit !== undefined);
-    const won = known.filter((x) => x.result!.hit).length;
-    const bets = xs.filter((x) => (x.stake ?? 0) > 0 && profit(x) !== null);
+    const known = xs.filter((x) => effective(x, mode).hit !== null);
+    const won = known.filter((x) => effective(x, mode).hit).length;
+    const bets = xs.filter((x) => (x.stake ?? 0) > 0 && profit(x, mode) !== null);
     const staked = bets.reduce((a, x) => a + (x.stake ?? 0), 0);
-    const gain = bets.reduce((a, x) => a + (profit(x) ?? 0), 0);
+    const gain = bets.reduce((a, x) => a + (profit(x, mode) ?? 0), 0);
     return { n: xs.length, known: known.length, won, rate: known.length ? (100 * won) / known.length : null, bets: bets.length, staked, gain, roi: staked ? (100 * gain) / staked : null };
   };
   const total = summarize(list);
@@ -104,6 +131,17 @@ function History({ items, catalog }: { items: FavSnap[]; catalog: Catalog }) {
         <Tabs value={period} onChange={setPeriod} items={[["7", "Últimos 7 días"], ["30", "Últimos 30 días"], ["all", "Todo"]]} />
         <label className="switch"><input type="checkbox" checked={onlyBets} onChange={(e) => setOnlyBets(e.target.checked)} /> Solo los que aposté</label>
       </div>
+      {hasTg && (
+        <div className="row">
+          <Tabs value={mode} onChange={setMode} items={[["all", "Todos (cuota pre partido)"], ["valid", "Solo válidos (Telegram)"]]} />
+          {mode === "valid" && (
+            <span className="muted small">
+              Cuentan solo los Over 0,5 1T con alerta de Telegram (la cuota en vivo llegó al mínimo), con la cuota y el resultado de la alerta.
+              {invalid > 0 && <> No válidos en el período: <b>{invalid}</b>.</>}
+            </span>
+          )}
+        </div>
+      )}
       <div className="kpis">
         <div><span>Partidos</span><b>{total.n}</b></div>
         <div><span>Aciertos</span><b>{total.rate == null ? "—" : `${Math.round(total.rate)}%`}</b><small>{total.won} de {total.known}</small></div>
@@ -111,15 +149,16 @@ function History({ items, catalog }: { items: FavSnap[]; catalog: Catalog }) {
         <div><span>Ganancia</span><b className={total.gain > 0 ? "pos" : total.gain < 0 ? "neg" : ""}>{money(total.gain)}</b></div>
         <div><span>ROI</span><b className={(total.roi ?? 0) > 0 ? "pos" : (total.roi ?? 0) < 0 ? "neg" : ""}>{total.roi == null ? "—" : pct(total.roi)}</b></div>
       </div>
-      {!list.length && <div className="empty">No hay partidos terminados en este período.</div>}
+      {!list.length && <div className="empty">{mode === "valid" ? "No hay partidos validados por Telegram en este período." : "No hay partidos terminados en este período."}</div>}
       {list.length > 0 && (
         <>
           <div className="table-scroll">
             <table className="grid compact hist-table">
-              <thead><tr><th>Fecha</th><th className="l">Partido</th><th>Mercado</th><th>Real</th><th>Casa</th><th>Resultado</th><th></th><th>Apuesta</th><th>Ganancia</th><th></th></tr></thead>
+              <thead><tr><th>Fecha</th><th className="l">Partido</th><th>Mercado</th><th>Real</th><th>Casa</th><th>Resultado</th><th></th>{hasTg && <th>Telegram</th>}<th>Apuesta</th><th>Ganancia</th><th></th></tr></thead>
               <tbody>
                 {list.map((x) => {
-                  const g = profit(x);
+                  const g = profit(x, mode);
+                  const hit = effective(x, mode).hit;
                   return (
                     <tr key={x.id}>
                       <td>{fmtShort(x.date)}</td>
@@ -128,7 +167,8 @@ function History({ items, catalog }: { items: FavSnap[]; catalog: Catalog }) {
                       <td className="c">{x.real?.toFixed(2) ?? "—"}</td>
                       <td className="c">{x.book?.toFixed(2) ?? "—"}</td>
                       <td className="c">{x.result!.ft[0]}-{x.result!.ft[1]} <span className="muted">({x.result!.ht[0]}-{x.result!.ht[1]})</span></td>
-                      <td className={`c ${x.result!.hit ? "pos" : x.result!.hit === false ? "neg" : "muted"}`}>{x.result!.hit ? "✔" : x.result!.hit === false ? "✘" : "?"}</td>
+                      <td className={`c ${hit ? "pos" : hit === false ? "neg" : "muted"}`}>{hit ? "✔" : hit === false ? "✘" : "?"}</td>
+                      {hasTg && <td className="c"><TgCell f={x} /></td>}
                       <td><BetBox snap={x} compact /></td>
                       <td className={`c ${g == null ? "muted" : g > 0 ? "pos" : g < 0 ? "neg" : ""}`}>{g == null ? "—" : money(g)}</td>
                       <td><button className="ghost" title="Borrar del historial" onClick={() => { if (confirm("¿Borrar este partido del historial?")) api.deleteFavorite(x.id); }}>🗑</button></td>
