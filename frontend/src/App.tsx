@@ -4,7 +4,11 @@ import { api, Catalog, LeagueNode, Meta, UserProfile } from "./api";
 import PrematchPage from "./pages/PrematchPage";
 import ProfilePage from "./pages/ProfilePage";
 import FavoritesPage from "./pages/FavoritesPage";
-import { cloud, initCloud, onCloud } from "./data/cloud";
+import { access, cloud, initCloud, initGate, onCloud } from "./data/cloud";
+import Gate from "./components/Gate";
+
+// En la página publicada solo entran las personas habilitadas; en la compu de desarrollo no se pide.
+const GATED = !["localhost", "127.0.0.1"].includes(location.hostname) && import.meta.env.VITE_SIN_ACCESO !== "1";
 import { startSync } from "./data/sync";
 import { reload as reloadStore } from "./engine/store";
 
@@ -24,10 +28,11 @@ export default function App() {
 
   // cuenta de Google: al entrar o cuando llegan cambios de otro dispositivo se recargan perfiles y Mis partidos
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [accessState, setAccessState] = useState(access.state);
   useEffect(() => {
     startSync(() => { reloadStore(); setVersion((v) => v + 1); setFavCount(api.favoriteIds().size); });
-    const off = onCloud(() => setUserEmail(cloud.user?.email ?? null));
-    void initCloud();
+    const off = onCloud(() => { setUserEmail(cloud.user?.email ?? null); setAccessState(access.state); });
+    void (GATED ? initGate() : initCloud());
     return () => { off(); };
   }, []);
 
@@ -48,6 +53,7 @@ export default function App() {
   }, [version]);
 
   const active = profiles.find((p) => p.is_active);
+  if (GATED && accessState !== "owner" && accessState !== "ok") return <Gate />;
 
   return (
     <div className="app">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { cloud, onCloud, signIn, signOut } from "../data/cloud";
+import { access, cloud, onCloud, signIn, signOut } from "../data/cloud";
+import AccessPanel from "./AccessPanel";
 import { onSync, syncNow, syncState } from "../data/sync";
 import { api } from "../api";
 import { Modal } from "./common";
@@ -47,6 +48,8 @@ export default function Settings({ onClose, onChanged }: { onClose: () => void; 
           <button className="primary" disabled={busy} onClick={() => run(async () => { await signIn(); return "Listo, ya estás conectado."; })}>Entrar con Google</button>
         </>
       )}
+
+      {access.state === "owner" && <AccessPanel />}
 
       <h4>Clave de API-Football</h4>
       {src === "otra-app" && <p className="ok-msg small">✔ Se está usando la clave que ya tenés guardada en tu otra app de este sitio.</p>}

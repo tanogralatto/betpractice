@@ -93,3 +93,71 @@ export async function push(data: CloudData): Promise<void> {
   const { db, F } = await load();
   await F.setDoc(ref(F, db), data);
 }
+
+// --- Acceso: solo personas habilitadas por el dueño -------------------------------------------
+// Se usa la lista de la otra app (acceso_tanoapp/{uid}) con un permiso propio: el campo
+// "cuotasreales" (true = habilitado). Aprobar acá NO cambia "estado", que es el acceso a la otra app.
+// Las reglas ya permiten: cada uno lee su documento y crea su pedido; el dueño lee y cambia todos.
+export type Access = "loading" | "login" | "owner" | "ok" | "none" | "pending" | "blocked" | "error";
+export interface AccessUser { uid: string; email: string; nombre: string; cuotasreales?: boolean; solicita?: string; estado?: string; creado?: number }
+
+export const access = { state: "loading" as Access, error: "" };
+let unsubOwn: (() => void) | null = null;
+
+function setAccess(s: Access, err = "") { access.state = s; access.error = err; emit(); }
+
+/** El dueño es la única cuenta que puede leer la lista completa (así lo dicen las reglas). */
+async function isOwner(): Promise<boolean> {
+  const { db, F } = await load();
+  try { await F.getDocs(F.query(F.collection(db, "acceso_tanoapp"), F.limit(1))); return true; } catch { return false; }
+}
+
+async function checkAccess(): Promise<void> {
+  unsubOwn?.(); unsubOwn = null;
+  if (!cloud.user) { setAccess("login"); return; }
+  setAccess("loading");
+  if (await isOwner()) { setAccess("owner"); return; }
+  const { db, F } = await load();
+  const ref = F.doc(db, "acceso_tanoapp", cloud.user.uid);
+  unsubOwn = F.onSnapshot(ref, (snap) => {
+    if (!snap.exists()) { setAccess("none"); return; }
+    const d = snap.data();
+    if (d.cuotasreales === true) {
+      if (access.state !== "ok") F.updateDoc(ref, { ultimoIngreso: F.serverTimestamp() }).catch(() => undefined);
+      setAccess("ok");
+    } else setAccess(d.cuotasreales === false && d.cuotasDecidido ? "blocked" : "pending");
+  }, (e) => setAccess("error", e.message));
+}
+
+/** Modo con acceso restringido: arranca Firebase siempre y controla quién entra. */
+export async function initGate(): Promise<void> {
+  const { auth, A } = await load();
+  try { await A.getRedirectResult(auth); } catch (e: any) { access.error = e?.message ?? ""; }
+  try { localStorage.setItem("cr:cuenta", "1"); } catch { /* nada */ }
+  A.onAuthStateChanged(auth, (u) => { cloud.user = u; cloud.ready = true; emit(); void checkAccess(); });
+}
+
+export async function requestAccess(): Promise<void> {
+  const { db, F } = await load();
+  const u = cloud.user!;
+  await F.setDoc(F.doc(db, "acceso_tanoapp", u.uid), {
+    email: u.email ?? "", nombre: u.displayName ?? "", estado: "pendiente", solicita: "cuotasreales",
+    creado: F.serverTimestamp(), ultimoIngreso: F.serverTimestamp(),
+  });
+}
+
+/** Lista para el dueño, en vivo. */
+export async function watchAccessList(fn: (users: AccessUser[]) => void, onErr: (m: string) => void): Promise<() => void> {
+  const { db, F } = await load();
+  return F.onSnapshot(F.collection(db, "acceso_tanoapp"), (snap) => {
+    fn(snap.docs.map((d) => {
+      const x = d.data();
+      return { uid: d.id, email: x.email ?? "", nombre: x.nombre ?? "", cuotasreales: x.cuotasreales, solicita: x.solicita, estado: x.estado, creado: x.creado?.toMillis?.() };
+    }));
+  }, (e) => onErr(e.message));
+}
+
+export async function setUserAccess(uid: string, on: boolean): Promise<void> {
+  const { db, F } = await load();
+  await F.updateDoc(F.doc(db, "acceso_tanoapp", uid), { cuotasreales: on, cuotasDecidido: F.serverTimestamp() });
+}

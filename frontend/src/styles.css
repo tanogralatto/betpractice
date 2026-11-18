@@ -230,3 +230,10 @@ button.star.on { color: #f5c542; }
 .hist-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; overflow-x: auto; }
 .hist-box h4 { margin: 4px 0 8px; }
 @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpis b { font-size: 18px; } .hist-grid { grid-template-columns: 1fr; } }
+
+/* ---- Acceso ---- */
+.gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.gate-box { width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.gate-box .brand { font-size: 22px; }
+.access-list { list-style: none; padding: 0; margin: 4px 0 10px; }
+.access-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
