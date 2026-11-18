@@ -1,4 +1,5 @@
 /** Perfiles, sub-perfiles y presets guardados en el navegador (localStorage). */
+import { LS } from "../data/storage";
 import type { PpgProfile, Preset, RealOddsProfile, SeasonProfile, SubKind, UserProfile } from "../api";
 
 type Sub = RealOddsProfile | PpgProfile | SeasonProfile;
@@ -61,10 +62,12 @@ export function load(): StoreData {
 
 export function save(d: StoreData): void {
   mem = d;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(d));
-  } catch { /* sin almacenamiento: queda en memoria hasta cerrar la página */ }
+  LS.set(KEY, d); // si no hay almacenamiento queda en memoria hasta cerrar la página
 }
+
+/** Vuelve a leer del navegador (después de bajar datos de la cuenta). */
+export function reload(): void { mem = null; }
+export const STORE_KEY = KEY;
 
 export function newId(d: StoreData): number {
   return d.nextId++;

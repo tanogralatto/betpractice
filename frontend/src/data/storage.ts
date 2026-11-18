@@ -1,5 +1,10 @@
 /** Almacenamiento del navegador: localStorage (cosas chicas) e IndexedDB (historiales y cuotas). */
 
+// Claves que se sincronizan con la cuenta de Google (ver data/sync.ts)
+export const SYNC_KEYS = new Set(["cuotas-reales.v1", "cr:favoritos", "cr:favoritos-borrados"]);
+let onSyncChange: ((key: string) => void) | null = null;
+export const setSyncListener = (fn: (key: string) => void) => { onSyncChange = fn; };
+
 export const LS = {
   get<T>(k: string, d: T): T {
     try {
@@ -9,10 +14,14 @@ export const LS = {
       return d;
     }
   },
-  set(k: string, v: unknown): void {
+  set(k: string, v: unknown, fromSync = false): void {
     try {
       localStorage.setItem(k, JSON.stringify(v));
     } catch { /* sin espacio o bloqueado: se ignora */ }
+    if (!fromSync && SYNC_KEYS.has(k)) {
+      try { localStorage.setItem(`cr:mod:${k}`, String(Date.now())); } catch { /* nada */ }
+      onSyncChange?.(k);
+    }
   },
   del(k: string): void {
     try { localStorage.removeItem(k); } catch { /* nada */ }
