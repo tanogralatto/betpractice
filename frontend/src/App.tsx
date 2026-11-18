@@ -4,6 +4,9 @@ import { api, Catalog, LeagueNode, Meta, UserProfile } from "./api";
 import PrematchPage from "./pages/PrematchPage";
 import ProfilePage from "./pages/ProfilePage";
 import FavoritesPage from "./pages/FavoritesPage";
+import { cloud, initCloud, onCloud } from "./data/cloud";
+import { startSync } from "./data/sync";
+import { reload as reloadStore } from "./engine/store";
 
 type Tab = "prematch" | "favorites" | "profile";
 
@@ -18,6 +21,15 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [favCount, setFavCount] = useState(() => api.favoriteIds().size);
   const [version, setVersion] = useState(0); // cambia al cambiar de clave o de modo
+
+  // cuenta de Google: al entrar o cuando llegan cambios de otro dispositivo se recargan perfiles y Mis partidos
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  useEffect(() => {
+    startSync(() => { reloadStore(); setVersion((v) => v + 1); setFavCount(api.favoriteIds().size); });
+    const off = onCloud(() => setUserEmail(cloud.user?.email ?? null));
+    void initCloud();
+    return () => { off(); };
+  }, []);
 
   const reloadProfiles = useCallback(async () => setProfiles(await api.profiles()), []);
 
@@ -55,7 +67,9 @@ export default function App() {
               {meta.provider === "api_football" ? "Datos en vivo (API-Football)" : "Datos de prueba"}
             </span>
           )}
-          <button className="ghost settings-btn" onClick={() => setShowSettings(true)}>⚙ Ajustes</button>
+          <button className="ghost settings-btn" onClick={() => setShowSettings(true)} title={userEmail ? `Sincronizado con ${userEmail}` : "Ajustes"}>
+            {userEmail ? "☁ " : ""}⚙ Ajustes
+          </button>
         </div>
       </header>
       {error && <div className="error">{error}</div>}

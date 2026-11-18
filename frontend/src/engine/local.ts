@@ -245,50 +245,89 @@ async function teamMatches(id: number, profileId: number | null, marketKey: stri
   };
 }
 
-// --- Mis partidos (favoritos) ---------------------------------------------------
+// --- Mis partidos (favoritos, historial y apuestas) ---------------------------------
+export interface FavResult { ft: [number, number]; ht: [number | null, number | null]; hit: boolean | null }
 export interface FavSnap {
-  id: number; date: string; kickoff: string; league: string; home: string; away: string; saved_at: string;
-  market: string | null; real: number | null; book: number | null; bookmaker: string | null; value: number | null;
+  id: number; date: string; kickoff: string; league: string; country?: string; home: string; away: string; saved_at: string;
+  market: string | null; real: number | null; real_n?: number; book: number | null; bookmaker: string | null; value: number | null;
+  /** monto apostado (null = no aposté) y cuota a la que se tomó */
+  stake?: number | null; odds_taken?: number | null;
+  /** resultado guardado cuando terminó (queda en el historial aunque ya no se puedan bajar los datos) */
+  result?: FavResult | null;
+  updated_at?: number;
 }
-const FAVS = "cr:favoritos";
+const FAVS = "cr:favoritos", DELETED = "cr:favoritos-borrados";
 const favMap = () => LS.get<Record<string, FavSnap>>(FAVS, {});
-function favoriteIds(): Set<number> { return new Set(Object.keys(favMap()).map(Number)); }
+const saveFavs = (f: Record<string, FavSnap>) => {
+  LS.set(FAVS, f);
+  try { window.dispatchEvent(new Event("cr:favs")); } catch { /* nada */ }
+};
+function favoriteIds(): Set<number> {
+  return new Set(Object.values(favMap()).filter((x) => !x.result).map((x) => x.id));
+}
+const allFavoriteIds = () => new Set(Object.keys(favMap()).map(Number));
+function markDeleted(id: number) {
+  const d = LS.get<Record<string, number>>(DELETED, {});
+  d[id] = Date.now();
+  LS.set(DELETED, d);
+}
 /** Agrega o quita un partido de Mis partidos. Al agregarlo guarda las cuotas de ese momento. */
 function toggleFavorite(r: Row, market?: string): Set<number> {
   const f = favMap();
-  if (f[r.id]) delete f[r.id];
+  if (f[r.id]) { delete f[r.id]; markDeleted(r.id); }
   else {
     const c = market ? r.markets[market] : undefined;
     f[r.id] = {
-      id: r.id, date: r.kickoff.slice(0, 10), kickoff: r.kickoff, league: r.league.name, home: r.home.name, away: r.away.name,
-      saved_at: new Date().toISOString(), market: market ?? null, real: c?.real ?? null, book: c?.book ?? null,
-      bookmaker: c?.bookmaker ?? null, value: c?.value ?? null,
+      id: r.id, date: r.kickoff.slice(0, 10), kickoff: r.kickoff, league: r.league.name, country: r.league.country,
+      home: r.home.name, away: r.away.name, saved_at: new Date().toISOString(), market: market ?? null,
+      real: c?.real ?? null, real_n: c?.n, book: c?.book ?? null, bookmaker: c?.bookmaker ?? null, value: c?.value ?? null,
+      stake: null, odds_taken: c?.book ?? null, result: null, updated_at: Date.now(),
     };
   }
-  LS.set(FAVS, f);
-  return favoriteIds();
+  saveFavs(f);
+  return allFavoriteIds();
 }
-function removeFinishedFavorites(): Set<number> {
+function deleteFavorite(id: number): void {
   const f = favMap();
-  for (const id of Object.keys(f)) if (repo.matches.get(Number(id))?.status === "FT") delete f[id];
-  LS.set(FAVS, f);
-  return favoriteIds();
+  delete f[id];
+  markDeleted(id);
+  saveFavs(f);
+}
+/** Anota cuánto se apostó y a qué cuota (stake null = no aposté). */
+function setBet(id: number, stake: number | null, oddsTaken: number | null): void {
+  const f = favMap();
+  if (!f[id]) return;
+  f[id] = { ...f[id], stake, odds_taken: oddsTaken, updated_at: Date.now() };
+  saveFavs(f);
 }
 
 export interface FavoritesResponse {
   rows: Row[]; markets: string[]; stats: string[]; streaks: string[];
-  saved: Record<number, FavSnap>; hits: Record<number, boolean | null>; missing: FavSnap[]; loading: number;
+  saved: Record<number, FavSnap>; history: FavSnap[]; missing: FavSnap[]; loading: number;
 }
 
-/** Partidos guardados, recalculados con el perfil activo. */
+/** Próximos (recalculados con el perfil activo) e historial de los ya terminados. */
 async function favorites(): Promise<FavoritesResponse> {
   const f = favMap();
-  const snaps = Object.values(f);
-  await Promise.all([...new Set(snaps.map((x) => x.date))].map((d) => loadDay(d).catch(() => undefined)));
+  const pending = Object.values(f).filter((x) => !x.result);
+  await Promise.all([...new Set(pending.map((x) => x.date))].map((d) => loadDay(d).catch(() => undefined)));
+  // los que terminaron pasan al historial con su resultado
+  let changed = false;
+  for (const x of pending) {
+    const m = repo.matches.get(x.id);
+    if (!m || !finished(m)) continue;
+    const mk = MARKETS_BY_KEY[x.market ?? "ou_ht_over_0_5"];
+    const ok = mk && !(mk.needs === "goals" && m.detail === false) && !(mk.needs === "corners" && m.hc === null);
+    f[x.id] = { ...x, result: { ft: [m.hg, m.ag], ht: [m.hthg, m.htag], hit: ok ? mk.check(m) : null }, updated_at: Date.now() };
+    changed = true;
+  }
+  if (changed) saveFavs(f);
+
   const p = getProfile(null);
   const markets = p.fav_markets, stats = p.fav_stats.slice(0, 3), streaks = p.fav_streaks.slice(0, 3);
   const bookmaker = p.fav_bookmakers[0] || BEST;
-  const found = snaps.map((x) => repo.matches.get(x.id)).filter((m): m is MatchData => !!m);
+  const upcoming = Object.values(f).filter((x) => !x.result);
+  const found = upcoming.map((x) => repo.matches.get(x.id)).filter((m): m is MatchData => !!m);
   const extra = extraSeasons(p);
   const leagues = [...new Set(found.map((m) => m.leagueId))];
   await warmFromCache(leagues, extra);
@@ -297,15 +336,10 @@ async function favorites(): Promise<FavoritesResponse> {
     ensureOdds(d, [...new Set(found.filter((m) => m.kickoff.startsWith(d)).map((m) => m.leagueId))]);
   const rows = found.map((m) => buildRow(m, p, markets, stats, streaks, bookmaker, leagueReady(m.leagueId, extra)))
     .sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-  const hits: Record<number, boolean | null> = {};
-  for (const m of found) {
-    const mk = MARKETS_BY_KEY[f[m.id].market ?? markets[0]];
-    hits[m.id] = finished(m) && mk && !(mk.needs === "goals" && m.detail === false) && !(mk.needs === "corners" && m.hc === null)
-      ? mk.check(m) : null;
-  }
   return {
-    rows, markets, stats, streaks, saved: f as unknown as Record<number, FavSnap>, hits,
-    missing: snaps.filter((x) => !repo.matches.has(x.id)), loading: repo.loading.size,
+    rows, markets, stats, streaks, saved: f as unknown as Record<number, FavSnap>,
+    history: Object.values(f).filter((x) => x.result).sort((a, b) => b.kickoff.localeCompare(a.kickoff)),
+    missing: upcoming.filter((x) => !repo.matches.has(x.id)), loading: repo.loading.size,
   };
 }
 
@@ -429,8 +463,10 @@ export const localApi = {
   sample,
   teamMatches,
   favoriteIds,
+  allFavoriteIds,
   toggleFavorite,
-  removeFinishedFavorites,
+  deleteFavorite,
+  setBet,
   favorites,
   odds,
   presets: () => ok([...loadStore().presets].sort((a, b) => a.name.localeCompare(b.name))),

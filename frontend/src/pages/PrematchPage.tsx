@@ -45,7 +45,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   }, []);
   useEffect(() => setLoadAll(false), [date]);
   const [sampleRow, setSampleRow] = useState<Row | null>(null);
-  const [favs, setFavs] = useState<Set<number>>(() => api.favoriteIds());
+  const [favs, setFavs] = useState<Set<number>>(() => api.allFavoriteIds());
   const [teamsRow, setTeamsRow] = useState<Row | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [presetName, setPresetName] = useState("");
@@ -202,7 +202,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
             </div>
           )}
           <MatchList rows={data?.rows ?? []} markets={markets} stats={stats} streaks={streaks} catalog={catalog}
-            isFav={(id) => favs.has(id)} onFav={(r) => { const f = api.toggleFavorite(r, markets[0]); setFavs(f); onFavCount(f.size); }}
+            isFav={(id) => favs.has(id)} onFav={(r) => { setFavs(api.toggleFavorite(r, markets[0])); onFavCount(api.favoriteIds().size); }}
             onTeams={setTeamsRow} onSample={setSampleRow}
             empty={data ? "No hay partidos que cumplan los filtros para esta fecha." : ""} />
         </main>
