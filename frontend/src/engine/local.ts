@@ -11,6 +11,8 @@ import { FT, MatchData, finished, ga, gf } from "./types";
 import * as AF from "../data/apiFootball";
 import { Cache } from "../data/storage";
 import { h2hGames, teamGames } from "../data/repo";
+import { warmFromCache } from "../data/repo";
+import { LS } from "../data/storage";
 import { dayMatches, ensureLeagues, ensureOdds, history, leagueReady, loadDay, onChange, refresh, repo, setMode } from "../data/repo";
 
 export interface Meta { generated_at: string; provider: string; today: string; leagues_synced?: string[] }
@@ -120,6 +122,7 @@ function byMarket(sort: string, main: string | undefined): ((a: Row, b: Row) => 
 }
 
 const confirmedAll = new Set<string>(); // días en que el usuario aceptó calcular todas las ligas
+const ALWAYS_ALL = "cr:siempre-todas"; // "no volver a preguntar"
 
 async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   await loadDay(req.date);
@@ -144,9 +147,12 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   // Historial y cuotas: se piden solo para las ligas que se están mirando.
   const extra = extraSeasons(p);
   const needed = [...new Set(selected.map((m) => m.leagueId))];
+  // lo que ya está guardado en el navegador se usa sin preguntar (no gasta consultas)
+  await warmFromCache(needed.filter((l) => !leagueReady(l, extra)), extra);
   const missing = needed.filter((l) => !leagueReady(l, extra));
   if (req.load_all) confirmedAll.add(req.date);
-  const auto = missing.length <= AUTO_LOAD_MAX || confirmedAll.has(req.date);
+  if (req.load_all === "always") LS.set(ALWAYS_ALL, true);
+  const auto = missing.length <= AUTO_LOAD_MAX || confirmedAll.has(req.date) || LS.get(ALWAYS_ALL, false);
   if (auto) {
     ensureLeagues(missing, extra);
     ensureOdds(req.date, [...new Set(selected.filter((m) => m.status === "NS").map((m) => m.leagueId))]);
@@ -169,6 +175,7 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
     pending_calls: auto ? 0 : missing.length * (extra + 1) + needed.length,
     errors: [...new Set(repo.errors)],
     mode: repo.mode,
+    always_all: LS.get(ALWAYS_ALL, false),
   };
 }
 
@@ -293,6 +300,8 @@ export const localApi = {
     removeKey() { AF.setKey(""); setMode(AF.getKey() ? "api" : "demo"); },
     status: AF.status,
     usage: () => ({ ...AF.usage }),
+    alwaysAll: () => LS.get(ALWAYS_ALL, false),
+    setAlwaysAll: (v: boolean) => LS.set(ALWAYS_ALL, v),
     useDemo(on: boolean) { setMode(on || !AF.getKey() ? "demo" : "api"); },
     async clearCache() { await Cache.clear(); setMode(repo.mode); },
   },

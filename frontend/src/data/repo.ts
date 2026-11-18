@@ -152,6 +152,31 @@ function loadSeason(league: number, season: number): Promise<void> {
   return p;
 }
 
+/** Carga desde el navegador (sin consultas) las temporadas ya guardadas. Devuelve cuántas cargó. */
+export async function warmFromCache(leagueIds: number[], extraSeasons: number): Promise<number> {
+  if (repo.mode !== "api") return 0;
+  let n = 0;
+  await Promise.all(leagueIds.flatMap((l) => {
+    const cur = repo.currentSeason.get(l);
+    if (cur === undefined) return [];
+    return Array.from({ length: extraSeasons + 1 }, async (_, i) => {
+      const season = cur - i, k = `${l}:${season}`;
+      if (repo.seasonsLoaded.get(l)?.has(season)) return;
+      // si está guardada (aunque sea vieja) se usa ya; la temporada actual se renueva en segundo plano
+      const pack = await Cache.get<AF.FixturePack>(`fx:${k}`, 365 * 24 * H);
+      if (!pack) return;
+      add(pack);
+      const s = repo.seasonsLoaded.get(l) ?? new Set<number>();
+      s.add(season);
+      repo.seasonsLoaded.set(l, s);
+      n++;
+      if (i === 0 && !(await Cache.get(`fx:${k}`, 3 * H))) void loadSeason(l, season);
+    });
+  }));
+  if (n) historyDirty = true;
+  return n;
+}
+
 /** Temporadas que hacen falta según la muestra más amplia que usan los perfiles. */
 export function ensureLeagues(leagueIds: number[], extraSeasons: number): void {
   if (repo.mode !== "api") return;

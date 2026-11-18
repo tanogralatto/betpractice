@@ -79,6 +79,7 @@ export interface PrematchResponse {
   pending_calls?: number;
   errors?: string[];
   mode?: "api" | "demo";
+  always_all?: boolean;
 }
 export interface PrematchRequest {
   date: string;
@@ -91,7 +92,7 @@ export interface PrematchRequest {
   hide_without_odds: boolean;
   sort: string;
   filters: Filters;
-  load_all?: boolean;
+  load_all?: boolean | "always";
 }
 export interface SampleResponse {
   match: { id: number; home: string; away: string; league: string; kickoff: string };

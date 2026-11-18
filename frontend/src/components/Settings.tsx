@@ -40,6 +40,10 @@ export default function Settings({ onClose, onChanged }: { onClose: () => void; 
       <p className="muted small">La clave queda guardada solo en este navegador; no se sube a ningún lado. En esta sesión la app hizo {u.calls} consultas.</p>
 
       <h4>Datos</h4>
+      <label className="switch">
+        <input type="checkbox" defaultChecked={s.alwaysAll()} onChange={(e) => { s.setAlwaysAll(e.target.checked); onChanged(); }} />
+        Calcular siempre todas las ligas del día (sin preguntar, aunque sean muchas)
+      </label>
       <div className="row">
         {src && (s.mode() === "api"
           ? <button onClick={() => { s.useDemo(true); onChanged(); }}>Ver datos de prueba</button>
