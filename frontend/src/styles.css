@@ -150,3 +150,52 @@ img.flag { width: 18px; height: 13px; object-fit: cover; vertical-align: -2px; b
 .res-E { background: #2b2b2b; color: var(--muted); }
 .res-P { background: #3d1418; color: var(--neg); }
 tr.other-comp td { color: #b6bec8; }
+
+/* ---- Lista de partidos (estilo tarjetas) ---- */
+.matches { --cols: 330px 1fr; }
+.m-head, .m-row { display: grid; grid-template-columns: var(--cols); gap: 18px; align-items: center; }
+.m-head { position: sticky; top: 0; z-index: 2; background: var(--bg); color: var(--muted); font-size: 12px; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+.m-head .main, .m-title.main { color: var(--main); }
+.m-row { padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.m-row:hover { background: #121820; }
+.m-card { border: 1.5px solid #3aa79b; border-radius: 12px; padding: 8px 12px; background: var(--panel); min-width: 0; }
+.m-card-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.m-league { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-time { font-size: 15px; }
+.m-team { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; font-weight: 600; }
+.m-team span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-vs { text-align: center; color: #e06680; font-size: 11px; font-weight: 700; margin-top: 2px; }
+.m-country { margin-top: 4px; }
+.ppg-badge { flex-shrink: 0; min-width: 42px; text-align: center; border-radius: 5px; padding: 1px 6px; font-weight: 700; font-size: 12px; color: #111; }
+.ppg-badge.hi { background: #5fbf7a; } .ppg-badge.mid { background: #e3a83a; } .ppg-badge.lo { background: #e06666; }
+.ppg-badge.none { background: var(--panel2); color: var(--muted); }
+.m-block { min-width: 0; }
+.m-title { display: none; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 3px; }
+.m-odds { font-size: 16px; line-height: 1.8; white-space: nowrap; }
+.r-badge { display: inline-block; width: 18px; height: 18px; border-radius: 4px; background: var(--accent); color: #001018; font-weight: 800; font-size: 12px; text-align: center; line-height: 18px; vertical-align: 1px; }
+.m-real { color: #4fd1c5; font-weight: 800; font-size: 18px; }
+.m-val { font-weight: 700; font-size: 13px; }
+.bk-tag { display: inline-block; min-width: 26px; text-align: center; font-size: 10px; font-weight: 800; border-radius: 3px; padding: 2px 4px; color: #fff; vertical-align: 2px; }
+.bk-tag.bk-bet365 { background: #127a4b; } .bk-tag.bk-pinnacle { background: #c35d1e; } .bk-tag.bk-1xbet { background: #1d5fa8; }
+.bk-tag.none { background: var(--panel2); color: var(--muted); }
+.m-mini { display: grid; grid-template-columns: auto auto; gap: 2px 18px; font-size: 13px; width: max-content; }
+.m-mini span { color: var(--muted); } .m-mini b { text-align: right; }
+.m-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.m-actions button { padding: 3px 10px; font-size: 12px; }
+
+/* En el teléfono: tarjeta arriba y los bloques debajo, sin deslizar hacia el costado */
+@media (max-width: 900px) {
+  .m-head { display: none; }
+  .m-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 0; }
+  .m-card { flex: 1 1 100%; padding: 6px 10px; }
+  .m-team { margin-top: 3px; }
+  .m-vs { margin-top: 0; line-height: 1; }
+  .m-country { display: none; }
+  .m-block { flex: 0 0 auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; }
+  .m-odds { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; line-height: 1.5; }
+  .m-odds .m-title { flex: 1 1 100%; }
+  .m-title { display: block; }
+  .m-mini { gap: 1px 10px; }
+  .m-actions { flex: 1 1 100%; flex-direction: row; }
+  .m-actions button { flex: 1; }
+}
