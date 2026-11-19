@@ -210,3 +210,47 @@ export async function fetchTelegramAlerts(ids: number[]): Promise<Map<number, Tg
     return null; // sin permiso (no aprobado en la otra app) o sin conexión
   }
 }
+
+// --- Seguimiento en Telegram: enviar partidos a ⭐ Favoritos de la otra app ----------------------
+// El programa de alertas solo sigue los partidos de tanoapp_favoritos. Se crea el favorito con el mismo
+// formato que la otra app (destino "common") y marcado como enviado desde betpractice. Nunca se pisa
+// un favorito que ya existe ni se borra uno que no haya creado betpractice.
+export type Follow = "created" | "exists" | "denied" | "error";
+export interface FollowInfo { id: number; kickoff: string; home: string; away: string; league: string; country: string }
+
+export async function followInTelegram(m: FollowInfo): Promise<Follow> {
+  if (!cloud.user) return "denied";
+  const { db, F } = await load();
+  const ref = F.doc(db, "tanoapp_favoritos", String(m.id));
+  try {
+    if ((await F.getDoc(ref)).exists()) return "exists";
+    const iso = `${m.kickoff.slice(0, 16)}:00-03:00`; // hora de Argentina, como guarda la otra app
+    const [d, t] = [m.kickoff.slice(0, 10).split("-"), m.kickoff.slice(11, 16)];
+    const ln = `${m.league} · desde betpractice`;
+    const now = Date.now();
+    await F.setDoc(ref, {
+      id: String(m.id), sources: ["betpractice"], origen: "betpractice",
+      home: m.home, away: m.away, league: `${m.country} · ${ln}`,
+      kickoff: iso, dateText: `${d[2]}/${d[1]} · ${t}`,
+      market: "Más de 0,5 goles al descanso",
+      fixture: { id: String(m.id), hn: m.home, an: m.away, iso, lc: m.country, ln, st: "NS" },
+      analysis: null, poisson: null, strategyAnalysis: null,
+      destinations: ["common"], group: "common", vipStrategy: null,
+      savedAt: now, updatedAt: now, guardadoPor: cloud.user.email ?? "", actualizado: now,
+    });
+    return "created";
+  } catch (e: any) {
+    return /permission/i.test(e?.code ?? e?.message ?? "") ? "denied" : "error";
+  }
+}
+
+/** Quita de ⭐ Favoritos de la otra app solo si lo había creado betpractice. */
+export async function unfollowInTelegram(id: number): Promise<void> {
+  if (!cloud.user) return;
+  const { db, F } = await load();
+  const ref = F.doc(db, "tanoapp_favoritos", String(id));
+  try {
+    const snap = await F.getDoc(ref);
+    if (snap.exists() && snap.data().origen === "betpractice") await F.deleteDoc(ref);
+  } catch { /* sin permiso o sin conexión: no se hace nada */ }
+}
