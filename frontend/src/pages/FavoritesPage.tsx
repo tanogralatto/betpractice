@@ -34,9 +34,13 @@ export function profit(f: FavSnap, mode: Mode = "all"): number | null {
 }
 
 /** Celda con la validación de Telegram. */
+/** ¿El programa de alertas seguía este partido? (estaba en ⭐ Favoritos de la otra app) */
+const followed = (f: FavSnap) => f.tg_follow === "created" || f.tg_follow === "exists";
 function TgCell({ f }: { f: FavSnap }) {
   if (!f.tg) return <span className="muted" title="Sin datos de alertas (no aplica a este mercado, o tu cuenta no puede leer las alertas)">—</span>;
-  if (!f.tg.found) return <span className="tg-no" title="No hubo alerta: la cuota en vivo no llegó al mínimo">No válido</span>;
+  if (!f.tg.found && !followed(f))
+    return <span className="muted" title="El programa de alertas no seguía este partido (no estaba en ⭐ Favoritos de la otra app), así que no se sabe si la cuota llegó a 1,50">Sin seguimiento</span>;
+  if (!f.tg.found) return <span className="tg-no" title="El programa lo seguía y no hubo alerta: la cuota en vivo no llegó al mínimo">No válido</span>;
   return (
     <span className="tg-ok" title={`Alerta de Telegram${f.tg.minute != null ? ` en el minuto ${f.tg.minute}` : ""}${f.tg.estimated ? " (estimada)" : ""}${f.tg.doubtful ? " · dudosa" : ""}`}>
       ✅ {f.tg.odd?.toFixed(2) ?? "1.50"}{f.tg.minute != null ? ` · ${f.tg.minute}'` : ""}{f.tg.doubtful ? " ⚠" : ""}
@@ -79,7 +83,8 @@ function History({ items, catalog }: { items: FavSnap[]; catalog: Catalog }) {
   const since = period === "all" ? "" : new Date(Date.now() - Number(period) * 864e5).toLocaleDateString("en-CA");
   const inPeriod = items.filter((x) => (!since || x.date >= since) && (!onlyBets || (x.stake ?? 0) > 0));
   const list = mode === "valid" ? inPeriod.filter((x) => x.tg?.found) : inPeriod;
-  const invalid = inPeriod.filter((x) => x.tg && !x.tg.found).length;
+  const invalid = inPeriod.filter((x) => x.tg && !x.tg.found && followed(x)).length;
+  const unfollowed = inPeriod.filter((x) => x.tg && !x.tg.found && !followed(x)).length;
 
   const summarize = (xs: FavSnap[]) => {
     const known = xs.filter((x) => effective(x, mode).hit !== null);
@@ -138,6 +143,7 @@ function History({ items, catalog }: { items: FavSnap[]; catalog: Catalog }) {
             <span className="muted small">
               Cuentan solo los Over 0,5 1T con alerta de Telegram (la cuota en vivo llegó al mínimo), con la cuota y el resultado de la alerta.
               {invalid > 0 && <> No válidos en el período: <b>{invalid}</b>.</>}
+              {unfollowed > 0 && <> Sin seguimiento (no estaban en ⭐ Favoritos de la otra app): <b>{unfollowed}</b>.</>}
             </span>
           )}
         </div>
@@ -223,6 +229,10 @@ export default function FavoritesPage({ catalog, onCount }: { catalog: Catalog; 
           {s.value != null && <> · <span className={s.value > 0 ? "pos" : "neg"}>{pct(s.value)}</span></>}
         </span>
         <BetBox snap={s} />
+        {s.tg_follow === "created" && <span className="tg-ok small" title="Agregado a ⭐ Favoritos de la otra app: el programa de alertas lo sigue">📲 En seguimiento Telegram</span>}
+        {s.tg_follow === "exists" && <span className="tg-ok small" title="Ya estaba en ⭐ Favoritos de la otra app">📲 Ya estaba en seguimiento</span>}
+        {s.tg_follow === "denied" && <span className="muted small" title="Tu cuenta no puede escribir en Favoritos de la otra app">Sin permiso para el seguimiento Telegram</span>}
+        {s.tg_follow === "error" && <span className="tg-no" title="Volvé a marcar la estrella para reintentar">No se pudo enviar a Telegram</span>}
       </div>
     );
   };

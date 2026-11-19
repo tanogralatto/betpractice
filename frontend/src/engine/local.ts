@@ -10,7 +10,7 @@ import { load as loadStore, newId, save } from "./store";
 import { FT, MatchData, finished, ga, gf } from "./types";
 import * as AF from "../data/apiFootball";
 import { Cache } from "../data/storage";
-import { cloud, fetchTelegramAlerts } from "../data/cloud";
+import { cloud, fetchTelegramAlerts, followInTelegram, unfollowInTelegram } from "../data/cloud";
 import { h2hGames, teamGames } from "../data/repo";
 import { warmFromCache } from "../data/repo";
 import { LS } from "../data/storage";
@@ -256,6 +256,8 @@ export interface FavSnap {
   /** resultado guardado cuando terminó (queda en el historial aunque ya no se puedan bajar los datos) */
   result?: FavResult | null;
   /** cruce con las alertas de Telegram (+0,5 1T): found = la cuota en vivo llegó al mínimo */
+  /** envío al seguimiento de Telegram (⭐ Favoritos de la otra app): created/exists = lo sigue el programa de alertas */
+  tg_follow?: "created" | "exists" | "denied" | "error" | null;
   tg?: { checked_at: number; found: boolean; odd: number | null; minute: number | null;
     result: "won" | "lost" | "push" | "pending" | null; doubtful: boolean; estimated: boolean } | null;
   updated_at?: number;
@@ -278,8 +280,11 @@ function markDeleted(id: number) {
 /** Agrega o quita un partido de Mis partidos. Al agregarlo guarda las cuotas de ese momento. */
 function toggleFavorite(r: Row, market?: string): Set<number> {
   const f = favMap();
-  if (f[r.id]) { delete f[r.id]; markDeleted(r.id); }
-  else {
+  if (f[r.id]) {
+    const was = f[r.id];
+    delete f[r.id]; markDeleted(r.id);
+    if (was.tg_follow === "created" && !was.result) void unfollowInTelegram(r.id);
+  } else {
     const c = market ? r.markets[market] : undefined;
     f[r.id] = {
       id: r.id, date: r.kickoff.slice(0, 10), kickoff: r.kickoff, league: r.league.name, country: r.league.country,
@@ -287,6 +292,14 @@ function toggleFavorite(r: Row, market?: string): Set<number> {
       real: c?.real ?? null, real_n: c?.n, book: c?.book ?? null, bookmaker: c?.bookmaker ?? null, value: c?.value ?? null,
       stake: null, odds_taken: c?.book ?? null, result: null, updated_at: Date.now(),
     };
+    // Over 0,5 1T por jugarse: también al seguimiento de Telegram (⭐ Favoritos de la otra app)
+    if ((market ?? TG_MARKET) === TG_MARKET && r.status === "NS" && repo.mode === "api" && cloud.user) {
+      const info = { id: r.id, kickoff: r.kickoff, home: r.home.name, away: r.away.name, league: r.league.name, country: r.league.country };
+      void followInTelegram(info).then((res) => {
+        const cur = favMap();
+        if (cur[r.id]) { cur[r.id] = { ...cur[r.id], tg_follow: res, updated_at: Date.now() }; saveFavs(cur); }
+      });
+    }
   }
   saveFavs(f);
   return allFavoriteIds();
