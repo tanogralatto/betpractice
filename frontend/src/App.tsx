@@ -10,6 +10,7 @@ import Gate from "./components/Gate";
 // En la página publicada solo entran las personas habilitadas; en la compu de desarrollo no se pide.
 const GATED = !["localhost", "127.0.0.1"].includes(location.hostname) && import.meta.env.VITE_SIN_ACCESO !== "1";
 import { startSync } from "./data/sync";
+import { Cache } from "./data/storage";
 import { reload as reloadStore } from "./engine/store";
 
 type Tab = "prematch" | "favorites" | "profile";
@@ -33,7 +34,9 @@ export default function App() {
     startSync(() => { reloadStore(); setVersion((v) => v + 1); setFavCount(api.favoriteIds().size); });
     const off = onCloud(() => { setUserEmail(cloud.user?.email ?? null); setAccessState(access.state); });
     void (GATED ? initGate() : initCloud());
-    return () => { off(); };
+    // limpieza de datos viejos guardados, sin apurar la apertura
+    const tPrune = setTimeout(() => { void Cache.prune(); }, 8000);
+    return () => { off(); clearTimeout(tPrune); };
   }, []);
 
   const reloadProfiles = useCallback(async () => setProfiles(await api.profiles()), []);
