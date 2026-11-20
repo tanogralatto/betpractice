@@ -26,18 +26,31 @@ let fb: Promise<{
 }> | null = null;
 
 // Firebase se carga recién cuando hace falta (la página abre igual de rápido).
+let loadStep = "";
 function load() {
   if (!fb) {
     fb = (async () => {
+      loadStep = "descargando Firebase";
       const [{ initializeApp }, A, F] = await Promise.all([import("firebase/app"), import("firebase/auth"), import("firebase/firestore")]);
+      loadStep = "iniciando la app";
       const app = initializeApp(CONFIG);
-      const auth = A.getAuth(app);
-      await withTimeout(A.setPersistence(auth, A.browserLocalPersistence), 5000, "persistencia").catch(() => undefined);
+      loadStep = "iniciando la sesión de Google";
+      // Si el almacenamiento del navegador falla (lleno o bloqueado), se prueba el siguiente: así no se traba.
+      let auth: import("firebase/auth").Auth;
+      try {
+        auth = A.initializeAuth(app, {
+          persistence: [A.indexedDBLocalPersistence, A.browserLocalPersistence, A.inMemoryPersistence],
+          popupRedirectResolver: A.browserPopupRedirectResolver,
+        });
+      } catch { auth = A.getAuth(app); }
+      loadStep = "conectando la base de datos";
       // En algunos iPhone la conexión normal de Firestore se corta: se detecta y se usa "long polling".
       let db: import("firebase/firestore").Firestore;
       try { db = F.initializeFirestore(app, { experimentalAutoDetectLongPolling: true }); } catch { db = F.getFirestore(app); }
+      loadStep = "listo";
       return { auth, db, A, F };
     })();
+    fb.catch(() => { fb = null; });
   }
   return fb;
 }
@@ -195,7 +208,11 @@ export async function initGate(): Promise<void> {
   setStep("Conectando con Google…");
   let fb2;
   try { fb2 = await withTimeout(load(), 20000, "carga"); }
-  catch { setAccess("error", "No se pudo cargar el inicio de sesión. Revisá la conexión y tocá Reintentar."); return; }
+  catch (e: any) {
+    const why = String(e?.message ?? e).startsWith("timeout") ? "no terminó a tiempo" : String(e?.message ?? e);
+    setAccess("error", `No se pudo cargar el inicio de sesión (paso: ${loadStep || "inicio"} · ${why}).`);
+    return;
+  }
   const { auth, A } = fb2;
   try { localStorage.setItem("cr:cuenta", "1"); } catch { /* nada */ }
   let heard = false;

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { access, cloud, requestAccess, signIn, signOut } from "../data/cloud";
+import { Cache } from "../data/storage";
 
 /** Pantalla de entrada: solo pasan las personas habilitadas por el dueño. */
 export default function Gate() {
@@ -35,6 +36,9 @@ export default function Gate() {
           <>
             <div className="error">No se pudo verificar el acceso: {access.error}</div>
             <button className="primary" onClick={() => location.reload()}>Reintentar</button>
+            <button disabled={busy} onClick={() => run(async () => { await Cache.wipe(); location.reload(); })}>Liberar espacio y reintentar</button>
+            <p className="muted small">“Liberar espacio” borra solo los partidos y cuotas guardados de esta app (se vuelven a bajar solos).
+              No borra tus perfiles, Mis partidos, apuestas ni la clave.</p>
           </>
         )}
         {(err || (s === "login" && access.error)) && <div className="error">{err || access.error}</div>}

@@ -69,6 +69,43 @@ export const Cache = {
   async set(k: string, v: unknown): Promise<void> {
     try { await tx("readwrite", (st) => st.put({ t: Date.now(), v }, k)); } catch { /* sin caché */ }
   },
+  /** Borra lo viejo para no llenar el almacenamiento del navegador (lo compartido con la otra app del sitio). */
+  async prune(): Promise<number> {
+    try {
+      const all = (await tx<IDBValidKey[]>("readonly", (st) => st.getAllKeys())) ?? [];
+      const now = Date.now(), DAY = 864e5;
+      const entries: [string, number][] = [];
+      for (const k of all) {
+        const v = await tx<{ t: number }>("readonly", (st) => st.get(k));
+        entries.push([String(k), v?.t ?? 0]);
+      }
+      const drop = new Set<string>();
+      for (const [k, t] of entries) {
+        const age = now - t;
+        if ((k.startsWith("day:") || k.startsWith("odds:")) && age > 7 * DAY) drop.add(k);
+        else if ((k.startsWith("team:") || k.startsWith("h2h:")) && age > 3 * DAY) drop.add(k);
+        else if (k.startsWith("fx:") && age > 60 * DAY) drop.add(k);
+      }
+      // tope de cantidad: se quedan los 400 más nuevos
+      const rest = entries.filter(([k]) => !drop.has(k)).sort((a, b) => b[1] - a[1]);
+      for (const [k] of rest.slice(400)) drop.add(k);
+      if (drop.size) await tx("readwrite", (st) => { drop.forEach((k) => st.delete(k)); });
+      return drop.size;
+    } catch {
+      return 0;
+    }
+  },
+  /** Borra toda la base de datos de partidos y cuotas guardados (no toca perfiles, Mis partidos ni la clave). */
+  async wipe(): Promise<void> {
+    dbp = null;
+    await new Promise<void>((res) => {
+      try {
+        const r = indexedDB.deleteDatabase("cuotas-reales");
+        r.onsuccess = r.onerror = r.onblocked = () => res();
+        setTimeout(res, 4000);
+      } catch { res(); }
+    });
+  },
   async clear(prefix?: string): Promise<void> {
     try {
       if (!prefix) { await tx("readwrite", (st) => st.clear()); return; }
