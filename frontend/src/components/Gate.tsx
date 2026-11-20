@@ -14,7 +14,7 @@ export default function Gate() {
     <div className="gate">
       <div className="gate-box">
         <div className="brand">⚽ Cuotas reales</div>
-        {s === "loading" && <p className="muted">Verificando el acceso…</p>}
+        {s === "loading" && <p className="muted">Verificando el acceso… <span className="small">{access.step}</span></p>}
         {s === "login" && (
           <>
             <p>Para usar la app entrá con tu cuenta de Google.</p>
@@ -31,7 +31,12 @@ export default function Gate() {
           <p>Entraste como <b>{cloud.user?.email}</b>. Tu pedido de acceso está <b>pendiente</b>: cuando te habiliten, esta pantalla se abre sola.</p>
         )}
         {s === "blocked" && <p>La cuenta <b>{cloud.user?.email}</b> no tiene acceso a esta app.</p>}
-        {s === "error" && <div className="error">No se pudo verificar el acceso: {access.error}</div>}
+        {s === "error" && (
+          <>
+            <div className="error">No se pudo verificar el acceso: {access.error}</div>
+            <button className="primary" onClick={() => location.reload()}>Reintentar</button>
+          </>
+        )}
         {(err || (s === "login" && access.error)) && <div className="error">{err || access.error}</div>}
         {cloud.user && s !== "loading" && <button className="ghost" onClick={() => run(signOut)}>Entrar con otra cuenta</button>}
       </div>
