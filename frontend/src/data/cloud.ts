@@ -5,6 +5,7 @@
  * "bets~…" hace que los invitados de la otra app no puedan leerlo). No toca nada de la otra app.
  */
 import type { User } from "firebase/auth";
+import { isChunkError, recoverFromStaleVersion } from "../recover";
 
 const CONFIG = {
   apiKey: "AIzaSyDL0LkEW3IAdBZcOARMjzAewgB_lh1edjI",
@@ -217,6 +218,8 @@ export async function initGate(): Promise<void> {
     }
   }
   catch (e: any) {
+    // Archivo de la app que ya no existe (versión vieja guardada): se recarga sola con la versión nueva.
+    if (isChunkError(e) && recoverFromStaleVersion()) return;
     const why = String(e?.message ?? e).startsWith("timeout") ? "no terminó a tiempo" : String(e?.message ?? e);
     setAccess("error", `No se pudo cargar el inicio de sesión (paso: ${loadStep || "inicio"} · ${why}).`);
     return;
