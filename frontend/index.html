@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cuotas reales · Fútbol</title>
+    <meta http-equiv="Cache-Control" content="no-cache" />
+    <script>
+      // Si a los 10 s la app no arrancó (por ejemplo, la página guardada pide archivos que ya no existen
+      // después de una actualización), se recarga una vez pidiendo la versión nueva.
+      setTimeout(function () {
+        if (window.__crMontada) return;
+        try {
+          var last = Number(sessionStorage.getItem("cr:recargado") || "0");
+          if (Date.now() - last < 60000) return;
+          sessionStorage.setItem("cr:recargado", String(Date.now()));
+        } catch (e) {}
+        var u = new URL(location.href);
+        u.searchParams.set("v", Date.now().toString(36));
+        location.replace(u.toString());
+      }, 10000);
+    </script>
   </head>
   <body>
     <div id="root"></div>
