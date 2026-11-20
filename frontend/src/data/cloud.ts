@@ -207,7 +207,15 @@ async function checkAccess(): Promise<void> {
 export async function initGate(): Promise<void> {
   setStep("Conectando con Google…");
   let fb2;
-  try { fb2 = await withTimeout(load(), 20000, "carga"); }
+  try {
+    try { fb2 = await withTimeout(load(), 20000, "carga"); }
+    catch (e: any) {
+      if (String(e?.message).startsWith("timeout")) throw e;
+      // falla de descarga puntual: se espera un momento y se intenta una vez más
+      await new Promise((r) => setTimeout(r, 1500));
+      fb2 = await withTimeout(load(), 20000, "carga");
+    }
+  }
   catch (e: any) {
     const why = String(e?.message ?? e).startsWith("timeout") ? "no terminó a tiempo" : String(e?.message ?? e);
     setAccess("error", `No se pudo cargar el inicio de sesión (paso: ${loadStep || "inicio"} · ${why}).`);
