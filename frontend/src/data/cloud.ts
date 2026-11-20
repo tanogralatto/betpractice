@@ -32,11 +32,22 @@ function load() {
       const [{ initializeApp }, A, F] = await Promise.all([import("firebase/app"), import("firebase/auth"), import("firebase/firestore")]);
       const app = initializeApp(CONFIG);
       const auth = A.getAuth(app);
-      await A.setPersistence(auth, A.browserLocalPersistence);
-      return { auth, db: F.getFirestore(app), A, F };
+      await withTimeout(A.setPersistence(auth, A.browserLocalPersistence), 5000, "persistencia").catch(() => undefined);
+      // En algunos iPhone la conexión normal de Firestore se corta: se detecta y se usa "long polling".
+      let db: import("firebase/firestore").Firestore;
+      try { db = F.initializeFirestore(app, { experimentalAutoDetectLongPolling: true }); } catch { db = F.getFirestore(app); }
+      return { auth, db, A, F };
     })();
   }
   return fb;
+}
+
+/** Corta una espera que puede no terminar nunca (pasa en algunos teléfonos). */
+export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((res, rej) => {
+    const t = setTimeout(() => rej(new Error(`timeout:${what}`)), ms);
+    p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
+  });
 }
 
 export const cloud = { user: null as User | null, ready: false };
@@ -101,40 +112,99 @@ export async function push(data: CloudData): Promise<void> {
 export type Access = "loading" | "login" | "owner" | "ok" | "none" | "pending" | "blocked" | "error";
 export interface AccessUser { uid: string; email: string; nombre: string; cuotasreales?: boolean; solicita?: string; estado?: string; creado?: number }
 
-export const access = { state: "loading" as Access, error: "" };
+export const access = { state: "loading" as Access, error: "", step: "" };
 let unsubOwn: (() => void) | null = null;
+let checkRun = 0;
 
 function setAccess(s: Access, err = "") { access.state = s; access.error = err; emit(); }
+function setStep(step: string) { access.step = step; emit(); }
+
+// Último acceso confirmado en este dispositivo: con eso la app abre al instante y se verifica en segundo plano.
+const CACHE = "cr:acceso";
+const CACHE_DAYS = 14;
+function cachedAccess(uid: string): "owner" | "ok" | null {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE) || "null");
+    if (c && c.uid === uid && (c.state === "owner" || c.state === "ok") && Date.now() - c.t < CACHE_DAYS * 864e5) return c.state;
+  } catch { /* nada */ }
+  return null;
+}
+function saveAccess(uid: string, state: Access) {
+  try {
+    if (state === "owner" || state === "ok") localStorage.setItem(CACHE, JSON.stringify({ uid, state, t: Date.now() }));
+    else if (state === "none" || state === "pending" || state === "blocked" || state === "login") localStorage.removeItem(CACHE);
+  } catch { /* nada */ }
+}
 
 /** El dueño es la única cuenta que puede leer la lista completa (así lo dicen las reglas). */
 async function isOwner(): Promise<boolean> {
   const { db, F } = await load();
-  try { await F.getDocs(F.query(F.collection(db, "acceso_tanoapp"), F.limit(1))); return true; } catch { return false; }
+  try {
+    await withTimeout(F.getDocs(F.query(F.collection(db, "acceso_tanoapp"), F.limit(1))), 12000, "base de datos");
+    return true;
+  } catch (e: any) {
+    if (String(e?.message).startsWith("timeout")) throw e; // no contestó: no se sabe
+    return false; // sin permiso: no es el dueño
+  }
 }
 
 async function checkAccess(): Promise<void> {
+  const run = ++checkRun;
   unsubOwn?.(); unsubOwn = null;
-  if (!cloud.user) { setAccess("login"); return; }
-  setAccess("loading");
-  if (await isOwner()) { setAccess("owner"); return; }
+  const user = cloud.user;
+  if (!user) { saveAccess("", "login"); setAccess("login"); return; }
+  const cached = cachedAccess(user.uid);
+  // Ya habilitado antes en este dispositivo: entra ya y se verifica sin bloquear la pantalla.
+  if (cached) setAccess(cached); else { setAccess("loading"); setStep("Leyendo tus permisos…"); }
+  const fail = (msg: string) => {
+    if (run !== checkRun) return;
+    if (cached) return; // ya está adentro; se vuelve a verificar la próxima vez
+    setAccess("error", msg);
+  };
+  try {
+    if (await isOwner()) {
+      if (run !== checkRun) return;
+      saveAccess(user.uid, "owner"); setAccess("owner"); return;
+    }
+  } catch {
+    fail("La base de datos no responde. Revisá la conexión y tocá Reintentar.");
+    return;
+  }
   const { db, F } = await load();
-  const ref = F.doc(db, "acceso_tanoapp", cloud.user.uid);
+  const ref = F.doc(db, "acceso_tanoapp", user.uid);
+  let answered = false;
+  const timer = setTimeout(() => { if (!answered) fail("La base de datos no responde. Revisá la conexión y tocá Reintentar."); }, 12000);
   unsubOwn = F.onSnapshot(ref, (snap) => {
-    if (!snap.exists()) { setAccess("none"); return; }
-    const d = snap.data();
-    if (d.cuotasreales === true) {
-      if (access.state !== "ok") F.updateDoc(ref, { ultimoIngreso: F.serverTimestamp() }).catch(() => undefined);
-      setAccess("ok");
-    } else setAccess(d.cuotasreales === false && d.cuotasDecidido ? "blocked" : "pending");
-  }, (e) => setAccess("error", e.message));
+    answered = true; clearTimeout(timer);
+    if (run !== checkRun) return;
+    let st: Access;
+    if (!snap.exists()) st = "none";
+    else {
+      const d = snap.data();
+      if (d.cuotasreales === true) {
+        if (access.state !== "ok") F.updateDoc(ref, { ultimoIngreso: F.serverTimestamp() }).catch(() => undefined);
+        st = "ok";
+      } else st = d.cuotasreales === false && d.cuotasDecidido ? "blocked" : "pending";
+    }
+    saveAccess(user.uid, st); setAccess(st);
+  }, (e) => { answered = true; clearTimeout(timer); fail(e.message); });
 }
 
 /** Modo con acceso restringido: arranca Firebase siempre y controla quién entra. */
 export async function initGate(): Promise<void> {
-  const { auth, A } = await load();
-  try { await A.getRedirectResult(auth); } catch (e: any) { access.error = e?.message ?? ""; }
+  setStep("Conectando con Google…");
+  let fb2;
+  try { fb2 = await withTimeout(load(), 20000, "carga"); }
+  catch { setAccess("error", "No se pudo cargar el inicio de sesión. Revisá la conexión y tocá Reintentar."); return; }
+  const { auth, A } = fb2;
   try { localStorage.setItem("cr:cuenta", "1"); } catch { /* nada */ }
-  A.onAuthStateChanged(auth, (u) => { cloud.user = u; cloud.ready = true; emit(); void checkAccess(); });
+  let heard = false;
+  // Primero se escucha la sesión (antes esto esperaba a getRedirectResult, que en algunos iPhone no contesta nunca).
+  A.onAuthStateChanged(auth, (u) => { heard = true; cloud.user = u; cloud.ready = true; emit(); void checkAccess(); });
+  A.getRedirectResult(auth).catch((e: any) => { access.error = e?.message ?? ""; emit(); });
+  setTimeout(() => {
+    if (!heard) setAccess("error", "El inicio de sesión de Google no responde. Tocá Reintentar o entrá de nuevo.");
+  }, 15000);
 }
 
 export async function requestAccess(): Promise<void> {
