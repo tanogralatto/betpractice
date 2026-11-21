@@ -3,6 +3,7 @@ import { LS } from "./storage";
 import mapping from "./oddsMapping.json";
 import { MARKETS_BY_KEY } from "../engine/catalog";
 import type { MatchData } from "../engine/types";
+import { countApiCall } from "./usageReport";
 
 const API = "https://v3.football.api-sports.io";
 export const TZ = "America/Argentina/Buenos_Aires";
@@ -69,7 +70,10 @@ async function get(path: string, params: Record<string, string | number> = {}): 
         await sleep(5000 * (attempt + 1));
         continue;
       }
-      if (path !== "/status") usage.calls++;
+      if (path !== "/status") {
+        usage.calls++;
+        countApiCall();
+      }
       if (res.status === 429) { await sleep(15000); continue; }
       if (res.status >= 500) { await sleep(5000); continue; }
       const j = await res.json();
