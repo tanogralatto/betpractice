@@ -239,3 +239,11 @@ button.star.on { color: #f5c542; }
 .access-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .tg-ok { color: var(--pos); font-weight: 700; white-space: nowrap; }
 .tg-no { color: var(--neg); font-size: 12px; white-space: nowrap; }
+
+/* ---- Países plegables ---- */
+button.chip { font: inherit; color: var(--text); }
+.chip-toggle { border-style: dashed; }
+.countries-panel { padding: 8px 18px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.countries-panel .search { max-width: 320px; margin: 0 0 8px; }
+.countries-panel .chips { margin-left: 0; max-height: 40vh; overflow-y: auto; }
+@media (max-width: 900px) { .countries-panel { padding: 8px 12px; } .countries-panel .search { max-width: none; } }

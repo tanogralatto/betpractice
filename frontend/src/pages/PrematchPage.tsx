@@ -45,6 +45,10 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   }, []);
   useEffect(() => setLoadAll(false), [date]);
   const [sampleRow, setSampleRow] = useState<Row | null>(null);
+  // lista de países plegable (se recuerda si quedó abierta)
+  const [countriesOpen, setCountriesOpen] = useState<boolean>(() => { try { return localStorage.getItem("cr:paises-abiertos") === "1"; } catch { return false; } });
+  const toggleCountries = (v: boolean) => { setCountriesOpen(v); try { localStorage.setItem("cr:paises-abiertos", v ? "1" : "0"); } catch { /* nada */ } };
+  const [countryQ, setCountryQ] = useState("");
   const [favs, setFavs] = useState<Set<number>>(() => api.allFavoriteIds());
   const [teamsRow, setTeamsRow] = useState<Row | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -77,6 +81,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   const bkName = (k: string | null) => catalog.bookmakers.find((b) => b.key === k)?.name ?? "";
   const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
   const nFilters = countFilters(filters);
+  const selectedCountry = data?.countries.find((c) => leagues.length > 0 && sameSet(leagues, c.league_ids)) ?? null;
 
   const presetConfig = () => ({ leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters });
   const loadPreset = (p: Preset) => {
@@ -103,13 +108,35 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
           <span className={`chip ${!leagues.length ? "on" : ""}`} onClick={() => setLeagues([])}>Todos <b>{data?.total ?? 0}</b></span>
           <span className={`chip ${profile.fav_leagues.length && sameSet(leagues, profile.fav_leagues) ? "on" : ""}`}
             onClick={() => setLeagues(profile.fav_leagues)}>★ Favoritos <b>{data?.favorites_count ?? 0}</b></span>
-          {data?.countries.map((c) => (
-            <span key={c.country} className={`chip ${sameSet(leagues, c.league_ids) ? "on" : ""}`} onClick={() => setLeagues(c.league_ids)}>
-              <Flag flag={c.flag} /> {c.country} <b>{c.count}</b>
+          {/* con la lista plegada se ve igual el país elegido */}
+          {!countriesOpen && selectedCountry && (
+            <span className="chip on" onClick={() => setLeagues([])} title="Quitar el filtro de país">
+              <Flag flag={selectedCountry.flag} /> {selectedCountry.country} <b>{selectedCountry.count}</b> ✕
             </span>
-          ))}
+          )}
+          {!!data?.countries.length && (
+            <button className={`chip chip-toggle ${countriesOpen ? "on" : ""}`} onClick={() => toggleCountries(!countriesOpen)}>
+              🌍 Países <b>{data.countries.length}</b> {countriesOpen ? "▴" : "▾"}
+            </button>
+          )}
         </div>
       </div>
+      {countriesOpen && !!data?.countries.length && (
+        <div className="countries-panel">
+          <input className="search" placeholder="Buscar país…" value={countryQ} onChange={(e) => setCountryQ(e.target.value)} />
+          <div className="chips">
+            {data.countries
+              .filter((c) => !countryQ || c.country.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .includes(countryQ.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")))
+              .map((c) => (
+                <span key={c.country} className={`chip ${sameSet(leagues, c.league_ids) ? "on" : ""}`}
+                  onClick={() => { setLeagues(c.league_ids); toggleCountries(false); setCountryQ(""); }}>
+                  <Flag flag={c.flag} /> {c.country} <b>{c.count}</b>
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
 
       <div className="layout">
         <button className="mobile-only block" onClick={() => setPanelOpen(!panelOpen)}>
