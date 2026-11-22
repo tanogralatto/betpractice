@@ -62,6 +62,31 @@ docs/especificacion.md
 - `backend/` (Python) queda para desarrollo, tests y para sincronizar a una base local
   (`python -m app.sync`), con el mismo algoritmo.
 
+### Datos compartidos entre personas habilitadas
+
+Lo que cualquiera baja de API-Football (partidos del día, temporadas por liga, cuotas, partidos de
+equipos y H2H) queda en Firebase, en `cuotasreales_cache/{clave}` (formato compacto, un documento por
+día, liga-temporada o liga-día). Los demás lo leen de ahí y no gastan consultas. Orden de búsqueda:
+este dispositivo (IndexedDB) → nube compartida → API-Football. Vencimientos: día de hoy 10 min,
+cuotas 30 min, temporada en curso 3 h, temporadas pasadas 60 días.
+
+Requiere estas reglas en el proyecto de Firebase `appuestasclaude` (pegarlas debajo de la función
+`tanoOwner()`); el texto exacto también aparece en ⚙ Ajustes para el dueño:
+
+```
+    function cuotasRealesHabilitado() {
+      return tanoOwner() || (request.auth != null
+        && get(/databases/$(database)/documents/acceso_tanoapp/$(request.auth.uid)).data.get('cuotasreales', false) == true);
+    }
+    match /cuotasreales_cache/{key} {
+      allow read: if cuotasRealesHabilitado();
+      allow create, update: if cuotasRealesHabilitado()
+        && request.resource.data.keys().hasOnly(['v', 't', 'by', 'n'])
+        && request.resource.data.v is string
+        && request.resource.data.by == request.auth.uid;
+    }
+```
+
 ### Requisitos
 
 - Python 3.12+

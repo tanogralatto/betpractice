@@ -206,6 +206,7 @@ async function checkAccess(): Promise<void> {
 
 /** Modo con acceso restringido: arranca Firebase siempre y controla quién entra. */
 export async function initGate(): Promise<void> {
+  setGatedMode(true);
   setStep("Conectando con Google…");
   let fb2;
   try {
@@ -351,4 +352,51 @@ export async function unfollowInTelegram(id: number): Promise<void> {
     const snap = await F.getDoc(ref);
     if (snap.exists() && snap.data().origen === "betpractice") await F.deleteDoc(ref);
   } catch { /* sin permiso o sin conexión: no se hace nada */ }
+}
+
+// --- Datos compartidos entre las personas habilitadas (partidos, temporadas y cuotas) --------------
+// Lo que baja una persona queda en cuotasreales_cache/{clave} y los demás lo leen sin gastar consultas
+// de API-Football. Requiere las reglas de Firebase del README ("Datos compartidos").
+const SHARED = "cuotasreales_cache";
+export const shared = { disabled: false, reason: "", hits: 0, writes: 0 };
+const sharedKey = (k: string) => k.replace(/[:/]/g, "_");
+const sharedReady = () => !!cloud.user && !shared.disabled && (access.state === "owner" || access.state === "ok" || !gatedMode);
+let gatedMode = false;
+export const setGatedMode = (v: boolean) => { gatedMode = v; };
+
+function disableShared(e: any) {
+  if (/permission|insufficient/i.test(e?.code ?? e?.message ?? "")) {
+    shared.disabled = true;
+    shared.reason = "Faltan las reglas de Firebase para compartir (ver Ajustes).";
+    emit();
+  }
+}
+
+/** Lee un dato compartido si existe y no está vencido. Devuelve { v, t } o null. */
+export async function sharedGet(key: string, maxAgeMs: number): Promise<{ v: string; t: number } | null> {
+  if (!sharedReady()) return null;
+  try {
+    const { db, F } = await load();
+    const d = await withTimeout(F.getDoc(F.doc(db, SHARED, sharedKey(key))), 8000, "compartido");
+    if (!d.exists()) return null;
+    const x = d.data() as { v: string; t: number };
+    if (typeof x.v !== "string" || !x.t || Date.now() - x.t > maxAgeMs) return null;
+    shared.hits++;
+    return x;
+  } catch (e) {
+    disableShared(e);
+    return null;
+  }
+}
+
+/** Deja un dato bajado de la API para que lo usen los demás (si no es demasiado grande). */
+export async function sharedPut(key: string, json: string, t = Date.now()): Promise<void> {
+  if (!sharedReady() || json.length > 900_000) return;
+  try {
+    const { db, F } = await load();
+    await withTimeout(F.setDoc(F.doc(db, SHARED, sharedKey(key)), { v: json, t, by: cloud.user!.uid, n: json.length }), 10000, "compartido");
+    shared.writes++;
+  } catch (e) {
+    disableShared(e);
+  }
 }

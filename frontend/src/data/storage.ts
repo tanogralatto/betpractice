@@ -66,8 +66,9 @@ export const Cache = {
       return null;
     }
   },
-  async set(k: string, v: unknown): Promise<void> {
-    try { await tx("readwrite", (st) => st.put({ t: Date.now(), v }, k)); } catch { /* sin caché */ }
+  /** `t`: cuándo se bajó el dato (si vino de la nube compartida, su fecha original). */
+  async set(k: string, v: unknown, t = Date.now()): Promise<void> {
+    try { await tx("readwrite", (st) => st.put({ t, v }, k)); } catch { /* sin caché */ }
   },
   /** Borra lo viejo para no llenar el almacenamiento del navegador (lo compartido con la otra app del sitio). */
   async prune(): Promise<number> {
