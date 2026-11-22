@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { access, cloud, onCloud, signIn, signOut } from "../data/cloud";
 import AccessPanel from "./AccessPanel";
+import SharedPanel from "./SharedPanel";
 import { onSync, syncNow, syncState } from "../data/sync";
 import { api } from "../api";
 import { Modal } from "./common";
@@ -49,6 +50,7 @@ export default function Settings({ onClose, onChanged }: { onClose: () => void; 
         </>
       )}
 
+      <SharedPanel />
       {access.state === "owner" && <AccessPanel />}
 
       <h4>Clave de API-Football</h4>

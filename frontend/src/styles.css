@@ -247,3 +247,5 @@ button.chip { font: inherit; color: var(--text); }
 .countries-panel .search { max-width: 320px; margin: 0 0 8px; }
 .countries-panel .chips { margin-left: 0; max-height: 40vh; overflow-y: auto; }
 @media (max-width: 900px) { .countries-panel { padding: 8px 12px; } .countries-panel .search { max-width: none; } }
+.rules-box { background: var(--panel2); border: 1px solid var(--main); border-radius: 8px; padding: 8px 10px; margin: 6px 0; }
+.rules-box pre { white-space: pre-wrap; font-size: 11px; background: var(--bg); padding: 8px; border-radius: 6px; overflow-x: auto; }

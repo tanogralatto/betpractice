@@ -8,6 +8,7 @@ import { History } from "../engine/analysis";
 import type { MatchData } from "../engine/types";
 import * as AF from "./apiFootball";
 import { Cache } from "./storage";
+import { peekFixtures, tieredFixtures, tieredOdds } from "./tiered";
 
 export interface League { id: number; name: string; country: string; flag: string | null }
 type Mode = "api" | "demo";
@@ -101,11 +102,7 @@ export function loadDay(day: string, force = false): Promise<void> {
   const p = (async () => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: AF.TZ });
     const ttl = day < today ? 24 * H : 10 * 60_000;
-    let pack = force ? null : await Cache.get<AF.FixturePack>(`day:${day}`, ttl);
-    if (!pack) {
-      pack = await AF.fixturesByDate(day);
-      await Cache.set(`day:${day}`, pack);
-    }
+    const pack = await tieredFixtures(`day:${day}`, ttl, () => AF.fixturesByDate(day), force);
     add(pack);
     for (const l of pack.leagues) repo.currentSeason.set(l.id, l.season);
     changed();
@@ -129,11 +126,7 @@ function loadSeason(league: number, season: number): Promise<void> {
     emit();
     try {
       const isCurrent = season >= (repo.currentSeason.get(league) ?? season);
-      let pack = await Cache.get<AF.FixturePack>(`fx:${k}`, isCurrent ? 3 * H : 60 * 24 * H);
-      if (!pack) {
-        pack = await AF.fixturesBySeason(league, season);
-        await Cache.set(`fx:${k}`, pack);
-      }
+      const pack = await tieredFixtures(`fx:${k}`, isCurrent ? 3 * H : 60 * 24 * H, () => AF.fixturesBySeason(league, season));
       add(pack);
       const s = repo.seasonsLoaded.get(league) ?? new Set<number>();
       s.add(season);
@@ -162,10 +155,11 @@ export async function warmFromCache(leagueIds: number[], extraSeasons: number): 
     return Array.from({ length: extraSeasons + 1 }, async (_, i) => {
       const season = cur - i, k = `${l}:${season}`;
       if (repo.seasonsLoaded.get(l)?.has(season)) return;
-      // si está guardada (aunque sea vieja) se usa ya; la temporada actual se renueva en segundo plano
-      const pack = await Cache.get<AF.FixturePack>(`fx:${k}`, 365 * 24 * H);
-      if (!pack) return;
-      add(pack);
+      // si está guardada en el dispositivo o en la nube compartida (aunque sea vieja) se usa ya;
+      // la temporada actual se renueva en segundo plano
+      const found = await peekFixtures(`fx:${k}`, 365 * 24 * H);
+      if (!found) return;
+      add(found.pack);
       const s = repo.seasonsLoaded.get(l) ?? new Set<number>();
       s.add(season);
       repo.seasonsLoaded.set(l, s);
@@ -198,6 +192,7 @@ export const leagueReady = (league: number, extraSeasons: number) => {
 
 // --- api: cuotas -------------------------------------------------------------
 const oddsPromises = new Map<string, Promise<void>>();
+const forceOdds = new Set<string>(); // después de ↻ Actualizar: no se usa ninguna copia guardada
 export function ensureOdds(day: string, leagueIds: number[]): void {
   if (repo.mode !== "api") return;
   for (const l of leagueIds) {
@@ -207,11 +202,8 @@ export function ensureOdds(day: string, leagueIds: number[]): void {
     const p = (async () => {
       repo.loading.add(k);
       try {
-        let o = await Cache.get<AF.OddsMap>(k, 30 * 60_000);
-        if (!o) {
-          o = await AF.oddsByDate(day, l, season);
-          await Cache.set(k, o);
-        }
+        const o = await tieredOdds(k, 30 * 60_000, () => AF.oddsByDate(day, l, season), forceOdds.has(k));
+        forceOdds.delete(k);
         Object.assign(repo.odds, o);
       } catch (e: any) {
         oddsPromises.delete(k);
@@ -232,11 +224,7 @@ const extraPromises = new Map<string, Promise<Extra>>();
 function extra(k: string, ttl: number, fetcher: () => Promise<AF.FixturePack>): Promise<Extra> {
   if (extraPromises.has(k)) return extraPromises.get(k)!;
   const p = (async () => {
-    let pack = await Cache.get<AF.FixturePack>(k, ttl);
-    if (!pack) {
-      pack = await fetcher();
-      await Cache.set(k, pack);
-    }
+    const pack = await tieredFixtures(k, ttl, fetcher);
     return {
       matches: pack.matches,
       leagues: new Map(pack.leagues.map((l) => [l.id, l.name])),
@@ -257,7 +245,8 @@ export const h2hGames = (a: number, b: number) => {
 export async function refresh(day: string): Promise<void> {
   if (repo.mode !== "api") return;
   await Cache.clear(`odds:${day}`);
-  for (const k of [...oddsPromises.keys()]) if (k.startsWith(`odds:${day}`)) oddsPromises.delete(k);
+  // las cuotas del día se piden de nuevo a la API (no se usa la copia compartida) y quedan para los demás
+  for (const k of [...oddsPromises.keys()]) if (k.startsWith(`odds:${day}`)) { oddsPromises.delete(k); forceOdds.add(k); }
   for (const k of [...seasonPromises.keys()]) {
     const [l, s] = k.split(":").map(Number);
     if (repo.currentSeason.get(l) === s) { seasonPromises.delete(k); await Cache.clear(`fx:${k}`); }
