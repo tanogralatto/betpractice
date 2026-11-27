@@ -14,7 +14,7 @@ import { cloud, fetchTelegramAlerts, followInTelegram, unfollowInTelegram } from
 import { h2hGames, teamGames } from "../data/repo";
 import { warmFromCache } from "../data/repo";
 import { LS } from "../data/storage";
-import { dayMatches, ensureLeagues, ensureOdds, history, leagueReady, loadDay, onChange, refresh, repo, setMode } from "../data/repo";
+import { dayMatches, ensureLeagues, ensureOdds, history, leagueReady, loadDay, onChange, refresh, repo, setMode, warmOdds } from "../data/repo";
 
 export interface Meta { generated_at: string; provider: string; today: string; leagues_synced?: string[] }
 
@@ -125,8 +125,13 @@ function byMarket(sort: string, main: string | undefined): ((a: Row, b: Row) => 
 const confirmedAll = new Set<string>(); // días en que el usuario aceptó calcular todas las ligas
 const ALWAYS_ALL = "cr:siempre-todas"; // "no volver a preguntar"
 
+// Al abrir la página no se baja nada de la API (salvo la lista del día si no hay ninguna copia):
+// se usa lo guardado hasta que el usuario elige ligas, toca ↻ Actualizar o "Calcular todas".
+let armed = false;
+
 async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
-  await loadDay(req.date);
+  if (req.fetch || req.load_all) armed = true;
+  await loadDay(req.date, false, !armed);
   const p = getProfile(req.profile_id);
   const markets = req.markets ?? p.fav_markets;
   const stats = (req.stats ?? p.fav_stats).slice(0, 3);
@@ -149,14 +154,16 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   const extra = extraSeasons(p);
   const needed = [...new Set(selected.map((m) => m.leagueId))];
   // lo que ya está guardado en el navegador se usa sin preguntar (no gasta consultas)
-  await warmFromCache(needed.filter((l) => !leagueReady(l, extra)), extra);
+  await warmFromCache(needed.filter((l) => !leagueReady(l, extra)), extra, armed);
   const missing = needed.filter((l) => !leagueReady(l, extra));
   if (req.load_all) confirmedAll.add(req.date);
   if (req.load_all === "always") LS.set(ALWAYS_ALL, true);
-  const auto = missing.length <= AUTO_LOAD_MAX || confirmedAll.has(req.date) || LS.get(ALWAYS_ALL, false);
+  const oddsLeagues = [...new Set(selected.filter((m) => m.status === "NS").map((m) => m.leagueId))];
+  const auto = armed && (missing.length <= AUTO_LOAD_MAX || confirmedAll.has(req.date) || LS.get(ALWAYS_ALL, false));
+  if (!armed) await warmOdds(req.date, oddsLeagues);
   if (auto) {
     ensureLeagues(missing, extra);
-    ensureOdds(req.date, [...new Set(selected.filter((m) => m.status === "NS").map((m) => m.leagueId))]);
+    ensureOdds(req.date, oddsLeagues);
   }
 
   let rows = selected.map((m) => buildRow(m, p, markets, stats, streaks, bookmaker, leagueReady(m.leagueId, extra)));
@@ -172,7 +179,9 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
     countries: [...countries.values()].map((c) => ({ ...c, league_ids: [...c.league_ids].sort((a, b) => a - b) }))
       .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country)),
     loading: repo.loading.size,
-    pending_leagues: auto ? 0 : missing.length,
+    pending_leagues: auto || !armed ? 0 : missing.length,
+    waiting: !armed && repo.mode === "api",
+    waiting_leagues: armed ? 0 : missing.length,
     pending_calls: auto ? 0 : missing.length * (extra + 1) + needed.length,
     errors: [...new Set(repo.errors)],
     mode: repo.mode,

@@ -50,6 +50,7 @@ export default function FiltersDialog({ catalog, markets, stats, streaks, value,
             <legend>{name(catalog.streaks, k)}</legend>
             <RangeInput label="Racha local" step={1} value={get("streaks", k, "home")} onChange={(r) => set("streaks", k, "home", r)} />
             <RangeInput label="Racha visitante" step={1} value={get("streaks", k, "away")} onChange={(r) => set("streaks", k, "away", r)} />
+            <RangeInput label="Cualquiera de los dos" step={1} value={get("streaks", k, "any")} onChange={(r) => set("streaks", k, "any", r)} />
           </fieldset>
         )) : <p className="muted">Elegí rachas en el panel izquierdo.</p>)}
         {tab === "misc" && (

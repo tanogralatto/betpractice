@@ -39,7 +39,7 @@ export interface UserProfile {
 export interface Filters {
   markets?: Record<string, { real?: Range; book?: Range; value?: Range }>;
   stats?: Record<string, { avg?: Range; home?: Range; away?: Range; n?: Range }>;
-  streaks?: Record<string, { home?: Range; away?: Range }>;
+  streaks?: Record<string, { home?: Range; away?: Range; any?: Range }>;
   misc?: { ppg_home?: Range; ppg_away?: Range; sample_n?: Range };
 }
 
@@ -76,6 +76,8 @@ export interface PrematchResponse {
   countries: { country: string; code: string | null; flag?: string | null; count: number; league_ids: number[] }[];
   loading?: number;
   pending_leagues?: number;
+  waiting?: boolean;
+  waiting_leagues?: number;
   pending_calls?: number;
   errors?: string[];
   mode?: "api" | "demo";
@@ -93,6 +95,8 @@ export interface PrematchRequest {
   sort: string;
   filters: Filters;
   load_all?: boolean | "always";
+  /** el usuario ya pidió datos (eligió ligas, ↻ Actualizar…): se puede consultar la API */
+  fetch?: boolean;
 }
 export interface SampleResponse {
   match: { id: number; home: string; away: string; league: string; kickoff: string };

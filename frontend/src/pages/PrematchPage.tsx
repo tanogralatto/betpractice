@@ -38,6 +38,9 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   const [tick, setTick] = useState(0); // llegan datos nuevos (historiales, cuotas)
   const [loadAll, setLoadAll] = useState<boolean | "always">(false);
   const [refreshing, setRefreshing] = useState(false);
+  // no se consulta la API hasta que el usuario elige ligas o toca ↻ Actualizar
+  const [armed, setArmed] = useState(false);
+  const pickLeagues = (l: number[]) => { setArmed(true); setLeagues(l); };
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
     const off = api.onChange(() => { clearTimeout(t); t = setTimeout(() => setTick((x) => x + 1), 500); });
@@ -69,13 +72,13 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   useEffect(() => {
     setLoading(true);
     const t = setTimeout(() => {
-      api.prematch({ date, profile_id: profileId, leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters, load_all: loadAll })
+      api.prematch({ date, profile_id: profileId, leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters, load_all: loadAll, fetch: armed })
         .then((d) => { setData(d); setErr(""); })
         .catch((e) => setErr(e.message))
         .finally(() => setLoading(false));
     }, 150);
     return () => clearTimeout(t);
-  }, [date, profileId, leagues, markets, stats, streaks, bookmaker, hide, sort, filters, tick, loadAll]);
+  }, [date, profileId, leagues, markets, stats, streaks, bookmaker, hide, sort, filters, tick, loadAll, armed]);
 
   const mName = useMemo(() => Object.fromEntries(catalog.markets.map((m) => [m.key, m.name])), [catalog]);
   const bkName = (k: string | null) => catalog.bookmakers.find((b) => b.key === k)?.name ?? "";
@@ -86,7 +89,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   const presetConfig = () => ({ leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters });
   const loadPreset = (p: Preset) => {
     const c = p.config;
-    setLeagues(c.leagues ?? []); setMarkets(c.markets ?? []); setStats(c.stats ?? []); setStreaks(c.streaks ?? []);
+    pickLeagues(c.leagues ?? []); setMarkets(c.markets ?? []); setStats(c.stats ?? []); setStreaks(c.streaks ?? []);
     setBookmaker(c.bookmaker ?? "best"); setHide(!!c.hide_without_odds); setSort(c.sort ?? "time"); setFilters(c.filters ?? {});
   };
   const favBookmakers = [...profile.fav_bookmakers, ...catalog.bookmakers.map((b) => b.key).filter((k) => !profile.fav_bookmakers.includes(k))];
@@ -100,17 +103,17 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
         <button className={date === today() ? "on" : ""} onClick={() => setDate(today())}>Hoy</button>
         {data?.mode === "api" && (
           <button title="Volver a pedir partidos y cuotas del día" disabled={refreshing}
-            onClick={async () => { setRefreshing(true); try { await api.refresh(date); } finally { setRefreshing(false); setTick((x) => x + 1); } }}>
+            onClick={async () => { setArmed(true); setRefreshing(true); try { await api.refresh(date); } finally { setRefreshing(false); setTick((x) => x + 1); } }}>
             {refreshing ? "Actualizando…" : "↻ Actualizar"}
           </button>
         )}
         <div className="chips">
-          <span className={`chip ${!leagues.length ? "on" : ""}`} onClick={() => setLeagues([])}>Todos <b>{data?.total ?? 0}</b></span>
+          <span className={`chip ${!leagues.length ? "on" : ""}`} onClick={() => pickLeagues([])}>Todos <b>{data?.total ?? 0}</b></span>
           <span className={`chip ${profile.fav_leagues.length && sameSet(leagues, profile.fav_leagues) ? "on" : ""}`}
-            onClick={() => setLeagues(profile.fav_leagues)}>★ Favoritos <b>{data?.favorites_count ?? 0}</b></span>
+            onClick={() => pickLeagues(profile.fav_leagues)}>★ Favoritos <b>{data?.favorites_count ?? 0}</b></span>
           {/* con la lista plegada se ve igual el país elegido */}
           {!countriesOpen && selectedCountry && (
-            <span className="chip on" onClick={() => setLeagues([])} title="Quitar el filtro de país">
+            <span className="chip on" onClick={() => pickLeagues([])} title="Quitar el filtro de país">
               <Flag flag={selectedCountry.flag} /> {selectedCountry.country} <b>{selectedCountry.count}</b> ✕
             </span>
           )}
@@ -130,7 +133,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
                 .includes(countryQ.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")))
               .map((c) => (
                 <span key={c.country} className={`chip ${sameSet(leagues, c.league_ids) ? "on" : ""}`}
-                  onClick={() => { setLeagues(c.league_ids); toggleCountries(false); setCountryQ(""); }}>
+                  onClick={() => { pickLeagues(c.league_ids); toggleCountries(false); setCountryQ(""); }}>
                   <Flag flag={c.flag} /> {c.country} <b>{c.count}</b>
                 </span>
               ))}
@@ -143,7 +146,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
           {panelOpen ? "▴ Ocultar opciones" : "⚙ Opciones: mercados, filtros, perfil…"}
         </button>
         <aside className={`sidebar ${panelOpen ? "open" : ""}`}>
-          <Section title="Ligas" open={false}><LeagueTree tree={tree} value={leagues} onChange={setLeagues} /></Section>
+          <Section title="Ligas" open={false}><LeagueTree tree={tree} value={leagues} onChange={pickLeagues} /></Section>
           <Section title={`Mercados (${markets.length})`}>
             <MarketPicker catalog={catalog} value={markets} onChange={setMarkets} favorites={profile.fav_markets} />
           </Section>
@@ -215,6 +218,16 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
             <div className="notice">
               Estás viendo <b>datos de prueba</b>. Para ver los partidos reales de cada día, cargá tu clave de API-Football en{" "}
               <button className="link" onClick={openSettings}>⚙ Ajustes</button>.
+            </div>
+          )}
+          {data?.waiting && (
+            <div className="notice">
+              Para no gastar consultas, al abrir la página solo se muestra lo que ya estaba guardado
+              {data.waiting_leagues ? <> (faltan datos de <b>{data.waiting_leagues}</b> ligas)</> : null}.
+              Elegí ligas (un país, <b>★ Favoritos</b> o el panel <b>Ligas</b>) o tocá <b>↻ Actualizar</b> para bajar lo que falta.
+              <div className="row">
+                <button onClick={() => setArmed(true)}>Bajar datos ahora</button>
+              </div>
             </div>
           )}
           {!!data?.pending_leagues && (

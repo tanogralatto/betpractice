@@ -30,7 +30,7 @@ def row_passes(row: dict, filters: dict | None) -> bool:
     Estructura de `filters`:
       markets: {market_key: {real: [a,b], book: [a,b], value: [a,b]}}
       stats:   {stat_key:   {avg: [..], home: [..], away: [..], n: [..]}}
-      streaks: {streak_key: {home: [..], away: [..]}}
+      streaks: {streak_key: {home: [..], away: [..], any: [..]}}  (any = local O visitante)
       misc:    {ppg_home: [..], ppg_away: [..], sample_n: [..]}
     """
     if not filters:
@@ -55,6 +55,9 @@ def row_passes(row: dict, filters: dict | None) -> bool:
     for key, f in (filters.get("streaks") or {}).items():
         cell = row["streaks"].get(key) or {}
         if not (in_range(cell.get("home"), f.get("home")) and in_range(cell.get("away"), f.get("away"))):
+            return False
+        # "any": pasa si el local O el visitante cae en el rango
+        if not (in_range(cell.get("home"), f.get("any")) or in_range(cell.get("away"), f.get("any"))):
             return False
     misc = filters.get("misc") or {}
     if not (in_range(row["home"].get("ppg"), misc.get("ppg_home"))

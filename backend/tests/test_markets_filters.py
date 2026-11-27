@@ -100,3 +100,11 @@ def test_filtros_combinados():
 def test_filtro_de_mercado_no_calculado():
     assert not row_passes(_row(), {"markets": {"btts_yes": {"real": [1, None]}}})
     assert row_passes(_row(), {"markets": {"btts_yes": {"real": [None, None]}}})
+
+
+def test_racha_cualquiera_de_los_dos():
+    f = {"streaks": {"ht_over_0_5": {"any": [3, None]}}}
+    assert row_passes(_row(streak=(3, 0)), f)
+    assert row_passes(_row(streak=(0, 4)), f)
+    assert not row_passes(_row(streak=(2, 2)), f)
+    assert row_passes(_row(streak=(0, 0)), {"streaks": {"ht_over_0_5": {"any": [None, None]}}})

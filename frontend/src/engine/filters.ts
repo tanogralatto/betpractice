@@ -26,6 +26,8 @@ export function rowPasses(row: Row, f?: Filters | null): boolean {
   for (const [k, x] of Object.entries(f.streaks ?? {})) {
     const c = row.streaks[k];
     if (!inRange(c?.home, x.home) || !inRange(c?.away, x.away)) return false;
+    // "Cualquiera": pasa si el local O el visitante cae en el rango
+    if (!inRange(c?.home, x.any) && !inRange(c?.away, x.any)) return false;
   }
   const misc = f.misc ?? {};
   return inRange(row.home.ppg, misc.ppg_home) && inRange(row.away.ppg, misc.ppg_away) && inRange(row.sample_n, misc.sample_n);
