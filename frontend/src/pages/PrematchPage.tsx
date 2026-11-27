@@ -84,7 +84,11 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   const bkName = (k: string | null) => catalog.bookmakers.find((b) => b.key === k)?.name ?? "";
   const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
   const nFilters = countFilters(filters);
-  const selectedCountry = data?.countries.find((c) => leagues.length > 0 && sameSet(leagues, c.league_ids)) ?? null;
+  // países elegidos: todos sus torneos están en la selección (se pueden elegir varios)
+  const countryOn = (ids: number[]) => leagues.length > 0 && ids.every((id) => leagues.includes(id));
+  const selectedCountries = data?.countries.filter((c) => countryOn(c.league_ids)) ?? [];
+  const toggleCountry = (ids: number[]) =>
+    pickLeagues(countryOn(ids) ? leagues.filter((id) => !ids.includes(id)) : [...new Set([...leagues, ...ids])]);
 
   const presetConfig = () => ({ leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters });
   const loadPreset = (p: Preset) => {
@@ -108,15 +112,16 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
           </button>
         )}
         <div className="chips">
-          <span className={`chip ${!leagues.length ? "on" : ""}`} onClick={() => pickLeagues([])}>Todos <b>{data?.total ?? 0}</b></span>
+          <span className={`chip ${!leagues.length ? "on" : ""}`} onClick={() => setLeagues([])}
+            title="Ver todos los partidos del día (no baja datos: elegí países para calcular)">Todos <b>{data?.total ?? 0}</b></span>
           <span className={`chip ${profile.fav_leagues.length && sameSet(leagues, profile.fav_leagues) ? "on" : ""}`}
             onClick={() => pickLeagues(profile.fav_leagues)}>★ Favoritos <b>{data?.favorites_count ?? 0}</b></span>
-          {/* con la lista plegada se ve igual el país elegido */}
-          {!countriesOpen && selectedCountry && (
-            <span className="chip on" onClick={() => pickLeagues([])} title="Quitar el filtro de país">
-              <Flag flag={selectedCountry.flag} /> {selectedCountry.country} <b>{selectedCountry.count}</b> ✕
+          {/* con la lista plegada se ven igual los países elegidos */}
+          {!countriesOpen && selectedCountries.map((c) => (
+            <span key={c.country} className="chip on" onClick={() => toggleCountry(c.league_ids)} title="Quitar este país">
+              <Flag flag={c.flag} /> {c.country} <b>{c.count}</b> ✕
             </span>
-          )}
+          ))}
           {!!data?.countries.length && (
             <button className={`chip chip-toggle ${countriesOpen ? "on" : ""}`} onClick={() => toggleCountries(!countriesOpen)}>
               🌍 Países <b>{data.countries.length}</b> {countriesOpen ? "▴" : "▾"}
@@ -132,8 +137,8 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
               .filter((c) => !countryQ || c.country.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .includes(countryQ.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")))
               .map((c) => (
-                <span key={c.country} className={`chip ${sameSet(leagues, c.league_ids) ? "on" : ""}`}
-                  onClick={() => { pickLeagues(c.league_ids); toggleCountries(false); setCountryQ(""); }}>
+                <span key={c.country} className={`chip ${countryOn(c.league_ids) ? "on" : ""}`}
+                  onClick={() => toggleCountry(c.league_ids)} title="Tocá para sumar o quitar este país">
                   <Flag flag={c.flag} /> {c.country} <b>{c.count}</b>
                 </span>
               ))}
@@ -224,7 +229,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
             <div className="notice">
               Para no gastar consultas, al abrir la página solo se muestra lo que ya estaba guardado
               {data.waiting_leagues ? <> (faltan datos de <b>{data.waiting_leagues}</b> ligas)</> : null}.
-              Elegí ligas (un país, <b>★ Favoritos</b> o el panel <b>Ligas</b>) o tocá <b>↻ Actualizar</b> para bajar lo que falta.
+              Tocá uno o varios países en <b>🌍 Países</b> (o <b>★ Favoritos</b>, o el panel <b>Ligas</b>) y se baja solo lo de esos países.
               <div className="row">
                 <button onClick={() => setArmed(true)}>Bajar datos ahora</button>
               </div>
