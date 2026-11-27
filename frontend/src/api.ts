@@ -39,7 +39,7 @@ export interface UserProfile {
 export interface Filters {
   markets?: Record<string, { real?: Range; book?: Range; value?: Range }>;
   stats?: Record<string, { avg?: Range; home?: Range; away?: Range; n?: Range }>;
-  streaks?: Record<string, { home?: Range; away?: Range }>;
+  streaks?: Record<string, { home?: Range; away?: Range; any?: Range }>;
   misc?: { ppg_home?: Range; ppg_away?: Range; sample_n?: Range };
 }
 
