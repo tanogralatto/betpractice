@@ -85,7 +85,10 @@ export default function MatchList({ rows, markets, stats, streaks, catalog, isFa
                 {streaks.map((k) => (
                   <div key={k} className="m-block">
                     <span className="m-title">{kName[k]}</span>
-                    <div className="m-mini"><span>L</span><b>{r.streaks[k]?.home ?? "—"}</b><span>V</span><b>{r.streaks[k]?.away ?? "—"}</b></div>
+                    <div className="m-mini">
+                      <span>L</span><b>{r.streaks[k]?.home ?? "—"}{r.streaks[k]?.home_max != null && <small className="m-max" title="Racha máxima en las temporadas del perfil"> (máx {r.streaks[k].home_max})</small>}</b>
+                      <span>V</span><b>{r.streaks[k]?.away ?? "—"}{r.streaks[k]?.away_max != null && <small className="m-max" title="Racha máxima en las temporadas del perfil"> (máx {r.streaks[k].away_max})</small>}</b>
+                    </div>
                   </div>
                 ))}
                 <div className="m-actions">

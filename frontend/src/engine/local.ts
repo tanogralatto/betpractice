@@ -93,6 +93,8 @@ function buildRow(m: MatchData, p: UserProfile, markets: string[], stats: string
     row.streaks[k] = {
       home: A.teamStreak(h, m, m.homeId, kp.home_as as A.Role, kp.seasons, sd),
       away: A.teamStreak(h, m, m.awayId, kp.away_as as A.Role, kp.seasons, sd),
+      home_max: A.teamStreakMax(h, m, m.homeId, kp.home_as as A.Role, kp.seasons, sd),
+      away_max: A.teamStreakMax(h, m, m.awayId, kp.away_as as A.Role, kp.seasons, sd),
     };
   }
   return row;

@@ -58,7 +58,7 @@ export interface Row {
   sample_away_n: number;
   markets: Record<string, MarketCell>;
   stats: Record<string, { home: number | null; away: number | null; avg: number | null; n_home: number; n_away: number }>;
-  streaks: Record<string, { home: number; away: number }>;
+  streaks: Record<string, { home: number; away: number; home_max?: number; away_max?: number }>;
 }
 export interface PrematchResponse {
   date: string;

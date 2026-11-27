@@ -188,6 +188,21 @@ def streak_length(matches_desc: list[MatchData], team_id: int, streak: StreakDef
     return n
 
 
+def streak_max(matches_desc: list[MatchData], team_id: int, streak: StreakDef) -> int:
+    """Racha más larga dentro de los partidos dados (incluye la actual)."""
+    best = n = 0
+    for m in matches_desc:
+        n = n + 1 if streak.check(m, team_id) else 0
+        best = max(best, n)
+    return best
+
+
+def team_streak_max(history: History, match: MatchData, team_id: int, role: str, seasons: str, streak: StreakDef) -> int:
+    window = history.season_window(match.league_id, match.season_id, _seasons_extra(seasons))
+    ms = history.team_matches(match.league_id, team_id, match.kickoff, role, window)
+    return streak_max(ms, team_id, streak)
+
+
 def team_streak(history: History, match: MatchData, team_id: int, role: str, seasons: str, streak: StreakDef) -> int:
     window = history.season_window(match.league_id, match.season_id, _seasons_extra(seasons))
     ms = history.team_matches(match.league_id, team_id, match.kickoff, role, window)

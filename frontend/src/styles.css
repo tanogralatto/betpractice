@@ -180,6 +180,7 @@ tr.other-comp td { color: #b6bec8; }
 .bk-tag.none { background: var(--panel2); color: var(--muted); }
 .m-mini { display: grid; grid-template-columns: auto auto; gap: 2px 18px; font-size: 13px; width: max-content; }
 .m-mini span { color: var(--muted); } .m-mini b { text-align: right; }
+.m-mini .m-max { color: var(--muted); font-weight: 400; font-size: 11px; }
 .m-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 .m-actions button { padding: 3px 10px; font-size: 12px; }
 

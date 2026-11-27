@@ -105,6 +105,8 @@ def build_rows(db: Session, matches: list[Match], profile: UserProfile, markets:
             row["streaks"][kk] = {
                 "home": A.team_streak(history, md, m.home_id, kp.home_as, kp.seasons, sd),
                 "away": A.team_streak(history, md, m.away_id, kp.away_as, kp.seasons, sd),
+                "home_max": A.team_streak_max(history, md, m.home_id, kp.home_as, kp.seasons, sd),
+                "away_max": A.team_streak_max(history, md, m.away_id, kp.away_as, kp.seasons, sd),
             }
         rows.append(row)
     return rows
