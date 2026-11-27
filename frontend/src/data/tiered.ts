@@ -60,6 +60,20 @@ export const tieredFixtures = (key: string, ttl: number, fetcher: () => Promise<
 export const tieredOdds = (key: string, ttl: number, fetcher: () => Promise<OddsMap>, force = false) =>
   tiered(key, ttl, fetcher, (o) => JSON.stringify(o), (s) => JSON.parse(s) as OddsMap, force);
 
+/** Cuotas: solo mira el dispositivo y la nube (sin gastar consultas). */
+export async function peekOdds(key: string, ttl: number): Promise<OddsMap | null> {
+  const local = await Cache.get<OddsMap>(key, ttl);
+  if (local) return local;
+  const remote = await sharedGet(key, ttl);
+  if (!remote) return null;
+  try {
+    const o = JSON.parse(remote.v) as OddsMap;
+    await Cache.set(key, o, remote.t);
+    usage.shared++;
+    return o;
+  } catch { return null; }
+}
+
 /** Solo mira el dispositivo y la nube (sin gastar consultas). */
 export async function peekFixtures(key: string, ttl: number): Promise<{ pack: FixturePack; t: number } | null> {
   const local = await Cache.get<FixturePack>(key, ttl);

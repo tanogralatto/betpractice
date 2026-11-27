@@ -20,6 +20,9 @@ Es una página web, como tus otras apps: **https://tanogralatto.github.io/betpra
    Si el día tiene muchas ligas, elegí las que te interesan con los chips de países o el panel
    **Ligas**, o tocá **“calculá todas”**.
 4. **↻ Actualizar** vuelve a pedir los partidos y las cuotas del día.
+5. Para no gastar consultas, **al abrir la página no se baja nada**: se muestra lo que ya estaba
+   guardado (en el dispositivo o en la nube compartida). Recién cuando elegís ligas, tocás
+   **↻ Actualizar** o **Bajar datos ahora**, se piden a la API las temporadas y cuotas que falten.
 
 Sin clave se ven **datos de prueba** (inventados) para conocer la app.
 

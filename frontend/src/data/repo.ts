@@ -8,7 +8,7 @@ import { History } from "../engine/analysis";
 import type { MatchData } from "../engine/types";
 import * as AF from "./apiFootball";
 import { Cache } from "./storage";
-import { peekFixtures, tieredFixtures, tieredOdds } from "./tiered";
+import { peekFixtures, peekOdds, tieredFixtures, tieredOdds } from "./tiered";
 
 export interface League { id: number; name: string; country: string; flag: string | null }
 type Mode = "api" | "demo";
@@ -96,19 +96,24 @@ function loadDemo(): Promise<void> {
 
 // --- api: partidos del día ---------------------------------------------------
 const dayPromises = new Map<string, Promise<void>>();
-export function loadDay(day: string, force = false): Promise<void> {
+/** `cacheOnly`: usa la lista guardada aunque sea vieja (al abrir, sin gastar consultas);
+ *  solo va a la API si no hay ninguna copia. */
+export function loadDay(day: string, force = false, cacheOnly = false): Promise<void> {
   if (repo.mode === "demo") return loadDemo();
+  const key = cacheOnly ? `cache:${day}` : day;
   if (!force && dayPromises.has(day)) return dayPromises.get(day)!;
+  if (!force && dayPromises.has(key)) return dayPromises.get(key)!;
   const p = (async () => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: AF.TZ });
     const ttl = day < today ? 24 * H : 10 * 60_000;
-    const pack = await tieredFixtures(`day:${day}`, ttl, () => AF.fixturesByDate(day), force);
+    const peek = cacheOnly && !force ? await peekFixtures(`day:${day}`, 2 * 24 * H) : null;
+    const pack = peek?.pack ?? await tieredFixtures(`day:${day}`, ttl, () => AF.fixturesByDate(day), force);
     add(pack);
     for (const l of pack.leagues) repo.currentSeason.set(l.id, l.season);
     changed();
   })();
-  dayPromises.set(day, p);
-  p.catch(() => dayPromises.delete(day));
+  dayPromises.set(key, p);
+  p.catch(() => dayPromises.delete(key));
   return p;
 }
 
@@ -146,7 +151,7 @@ function loadSeason(league: number, season: number): Promise<void> {
 }
 
 /** Carga desde el navegador (sin consultas) las temporadas ya guardadas. Devuelve cuántas cargó. */
-export async function warmFromCache(leagueIds: number[], extraSeasons: number): Promise<number> {
+export async function warmFromCache(leagueIds: number[], extraSeasons: number, renewStale = true): Promise<number> {
   if (repo.mode !== "api") return 0;
   let n = 0;
   await Promise.all(leagueIds.flatMap((l) => {
@@ -164,7 +169,7 @@ export async function warmFromCache(leagueIds: number[], extraSeasons: number): 
       s.add(season);
       repo.seasonsLoaded.set(l, s);
       n++;
-      if (i === 0 && !(await Cache.get(`fx:${k}`, 3 * H))) void loadSeason(l, season);
+      if (renewStale && i === 0 && !(await Cache.get(`fx:${k}`, 3 * H))) void loadSeason(l, season);
     });
   }));
   if (n) historyDirty = true;
@@ -191,6 +196,19 @@ export const leagueReady = (league: number, extraSeasons: number) => {
 };
 
 // --- api: cuotas -------------------------------------------------------------
+/** Cuotas ya guardadas (dispositivo o nube), aunque tengan algunas horas. No gasta consultas. */
+const oddsPeeked = new Set<string>();
+export async function warmOdds(day: string, leagueIds: number[]): Promise<void> {
+  if (repo.mode !== "api") return;
+  await Promise.all(leagueIds.map(async (l) => {
+    const k = `odds:${day}:${l}`;
+    if (oddsPeeked.has(k) || oddsPromises.has(k)) return;
+    oddsPeeked.add(k);
+    const o = await peekOdds(k, 24 * H);
+    if (o) Object.assign(repo.odds, o);
+  }));
+}
+
 const oddsPromises = new Map<string, Promise<void>>();
 const forceOdds = new Set<string>(); // después de ↻ Actualizar: no se usa ninguna copia guardada
 export function ensureOdds(day: string, leagueIds: number[]): void {
