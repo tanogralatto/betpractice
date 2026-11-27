@@ -159,7 +159,8 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   if (req.load_all) confirmedAll.add(req.date);
   if (req.load_all === "always") LS.set(ALWAYS_ALL, true);
   const oddsLeagues = [...new Set(selected.filter((m) => m.status === "NS").map((m) => m.leagueId))];
-  const auto = armed && (missing.length <= AUTO_LOAD_MAX || confirmedAll.has(req.date) || LS.get(ALWAYS_ALL, false));
+  // "Todos" (sin ligas elegidas) no baja nada solo: hay que elegir países/ligas o aceptar "Calcular todas"
+  const auto = armed && ((leagues.size > 0 && missing.length <= AUTO_LOAD_MAX) || confirmedAll.has(req.date) || LS.get(ALWAYS_ALL, false));
   if (!armed) await warmOdds(req.date, oddsLeagues);
   if (auto) {
     ensureLeagues(missing, extra);
