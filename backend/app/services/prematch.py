@@ -159,6 +159,14 @@ def prematch(db: Session, req: dict) -> dict:
         sign = 1 if sort == "real" else -1
         rows.sort(key=lambda r: (r["markets"].get(markets[0], {}).get(sort) is None,
                                  sign * (r["markets"].get(markets[0], {}).get(sort) or 0), r["kickoff"]))
+    elif sort.startswith("streak:"):
+        k = sort[7:]
+
+        def streak_key(r):
+            c = r["streaks"].get(k)
+            top, tot = (max(c["home"], c["away"]), c["home"] + c["away"]) if c else (-1, -1)
+            return (-top, -tot, r["kickoff"], r["league"]["name"])
+        rows.sort(key=streak_key)
     else:
         rows.sort(key=SORTS.get(sort, SORTS["time"]))
 
