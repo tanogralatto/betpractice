@@ -107,3 +107,14 @@ export function teamStreak(h: History, m: MatchData, team: number, role: Role, s
   }
   return n;
 }
+
+/** Racha más larga que tuvo el equipo en la misma ventana de temporadas (incluye la actual). */
+export function teamStreakMax(h: History, m: MatchData, team: number, role: Role, seasons: string, streak: StreakDef): number {
+  const ms = h.teamMatches(m.leagueId, team, m.kickoff, role, h.seasonWindow(m.leagueId, m.seasonId, EXTRA[seasons] ?? 0));
+  let best = 0, n = 0;
+  for (const x of ms) {
+    n = streak.check(x, team) ? n + 1 : 0;
+    if (n > best) best = n;
+  }
+  return best;
+}

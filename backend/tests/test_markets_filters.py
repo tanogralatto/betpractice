@@ -3,7 +3,7 @@ import pytest
 from app.catalog.markets import MARKETS_BY_KEY as M
 from app.catalog.streaks import STREAKS_BY_KEY as S
 from app.domain import Goal
-from app.services.analysis import ppg, History, streak_length
+from app.services.analysis import ppg, History, streak_length, streak_max
 from app.services.filters import in_range, row_passes
 from tests.helpers import mk
 
@@ -59,6 +59,8 @@ def test_ppg_y_rachas():
     assert streak_length(recent, 1, S["ht_under_0_5"]) == 2
     assert streak_length(recent, 1, S["no_win"]) == 2
     assert streak_length(recent, 1, S["win_ft"]) == 0
+    assert streak_max(recent, 1, S["win_ft"]) == 1  # ganó el más viejo: racha actual 0, máxima 1
+    assert streak_max(recent, 1, S["ht_under_0_5"]) == 2
 
 
 def test_in_range():
