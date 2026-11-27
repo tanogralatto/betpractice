@@ -124,6 +124,14 @@ function byMarket(sort: string, main: string | undefined): ((a: Row, b: Row) => 
   };
 }
 
+/** Orden por racha ("streak:<clave>"): primero la racha más alta entre local y visitante, después la suma. */
+function byStreak(sort: string): ((a: Row, b: Row) => number) | null {
+  if (!sort.startsWith("streak:")) return null;
+  const k = sort.slice(7);
+  const top = (r: Row) => { const c = r.streaks[k]; return c ? [Math.max(c.home, c.away), c.home + c.away] : [-1, -1]; };
+  return (a, b) => { const [x1, x2] = top(a), [y1, y2] = top(b); return y1 - x1 || y2 - x2 || SORTS.time(a, b); };
+}
+
 const confirmedAll = new Set<string>(); // días en que el usuario aceptó calcular todas las ligas
 const ALWAYS_ALL = "cr:siempre-todas"; // "no volver a preguntar"
 
@@ -173,7 +181,7 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   if (req.hide_without_odds && markets.length) rows = rows.filter((r) => r.markets[markets[0]]?.book != null);
   const hasFilters = !!req.filters && Object.keys(req.filters).length > 0;
   rows = rows.filter((r) => (r.pending && hasFilters ? false : rowPasses(r, req.filters)));
-  rows.sort(byMarket(req.sort, markets[0]) ?? SORTS[req.sort] ?? SORTS.time);
+  rows.sort(byMarket(req.sort, markets[0]) ?? byStreak(req.sort) ?? SORTS[req.sort] ?? SORTS.time);
   return {
     date: req.date, profile: { id: p.id, name: p.name }, markets, stats, streaks, bookmaker, rows,
     shown: rows.length, shown_leagues: new Set(rows.map((r) => r.league.id)).size,

@@ -169,6 +169,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
           </Section>
           <Section title="Ordenar">
             {["value", "real", "book"].includes(sort) && markets[0] && <div className="muted small">Según {mName[markets[0]]} (mercado principal)</div>}
+            {sort.startsWith("streak:") && <div className="muted small">Primero la racha más alta entre local y visitante</div>}
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="time">Por hora</option>
               <option value="league">Por liga</option>
@@ -177,6 +178,9 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
               <option value="value">Valor % (mayor primero)</option>
               <option value="real">Cuota real (menor primero)</option>
               <option value="book">Cuota de la casa (mayor primero)</option>
+              {streaks.map((k) => (
+                <option key={k} value={`streak:${k}`}>Racha {catalog.streaks.find((s) => s.key === k)?.name ?? k} (mayor primero)</option>
+              ))}
             </select>
           </Section>
           <Section title="Perfil">
@@ -226,14 +230,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
             </div>
           )}
           {data?.waiting && (
-            <div className="notice">
-              Para no gastar consultas, al abrir la página solo se muestra lo que ya estaba guardado
-              {data.waiting_leagues ? <> (faltan datos de <b>{data.waiting_leagues}</b> ligas)</> : null}.
-              Tocá uno o varios países en <b>🌍 Países</b> (o <b>★ Favoritos</b>, o el panel <b>Ligas</b>) y se baja solo lo de esos países.
-              <div className="row">
-                <button onClick={() => setArmed(true)}>Bajar datos ahora</button>
-              </div>
-            </div>
+            <div className="notice">Elegí uno o varios países en <b>🌍 Países</b> para calcular cuotas y rachas.</div>
           )}
           {!!data?.pending_leagues && (
             <div className="notice">
