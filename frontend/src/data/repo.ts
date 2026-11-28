@@ -122,8 +122,20 @@ export function dayMatches(day: string): MatchData[] {
 }
 
 // --- api: historial por liga y temporada -----------------------------------
-// temporada en curso: se renueva cada 24 h (o con ↻ Actualizar)
+// Temporada en curso: se renueva cada 24 h, o antes si en la copia hay un partido que ya terminó
+// pero figuraba sin jugar (así rachas y cuota real incluyen siempre el último resultado), o con ↻ Actualizar.
 const CURRENT_TTL = 24 * H;
+const kickoffMs = (k: string) => Date.parse(`${k.slice(0, 16)}:00-03:00`); // hora de Argentina
+export function seasonOutdated(pack: AF.FixturePack, t: number, now = Date.now()): boolean {
+  if (now - t > CURRENT_TTL) return true;
+  if (now - t < 30 * 60_000) return false; // recién bajada: no insistir (la API puede tardar en cargar el resultado)
+  return pack.matches.some((m) => {
+    if (m.status !== "NS" && m.status !== "LIVE") return false;
+    const k = kickoffMs(m.kickoff);
+    // terminó (≈2,5 h después del inicio), es de la última semana y la copia se bajó antes de que hubiera resultado seguro
+    return k + 2.5 * H < now && k > now - 7 * 24 * H && t < k + 6 * H;
+  });
+}
 const seasonPromises = new Map<string, Promise<void>>();
 function loadSeason(league: number, season: number): Promise<void> {
   const k = `${league}:${season}`;
@@ -133,8 +145,10 @@ function loadSeason(league: number, season: number): Promise<void> {
     emit();
     try {
       const isCurrent = season >= (repo.currentSeason.get(league) ?? season);
-      const pack = await tieredFixtures(`fx:${k}`, isCurrent ? CURRENT_TTL : 60 * 24 * H, () => AF.fixturesBySeason(league, season));
+      const pack = await tieredFixtures(`fx:${k}`, isCurrent ? CURRENT_TTL : 60 * 24 * H, () => AF.fixturesBySeason(league, season),
+        false, isCurrent ? seasonOutdated : undefined);
       add(pack);
+      if (isCurrent) copies.set(k, { pack, t: Date.now() });
       const s = repo.seasonsLoaded.get(league) ?? new Set<number>();
       s.add(season);
       repo.seasonsLoaded.set(league, s);
@@ -152,6 +166,24 @@ function loadSeason(league: number, season: number): Promise<void> {
   return p;
 }
 
+// Copia en uso de cada temporada en curso ("liga:temporada"), para saber si quedó vieja.
+const copies = new Map<string, { pack: AF.FixturePack; t: number }>();
+
+/** Renueva la temporada en curso de estas ligas si su copia quedó vieja (terminó un partido desde
+ *  que se bajó, o pasaron 24 h). Primero mira la nube compartida; solo si hace falta, la API. */
+export function renewOutdated(leagueIds: number[]): void {
+  if (repo.mode !== "api") return;
+  for (const l of leagueIds) {
+    const cur = repo.currentSeason.get(l);
+    if (cur === undefined) continue;
+    const k = `${l}:${cur}`, c = copies.get(k);
+    if (!c || !seasonOutdated(c.pack, c.t) || repo.loading.has(k)) continue;
+    copies.delete(k);
+    seasonPromises.delete(k);
+    void loadSeason(l, cur);
+  }
+}
+
 /** Carga desde el navegador (sin consultas) las temporadas ya guardadas. Devuelve cuántas cargó. */
 export async function warmFromCache(leagueIds: number[], extraSeasons: number, renewStale = true): Promise<number> {
   if (repo.mode !== "api") return 0;
@@ -167,11 +199,12 @@ export async function warmFromCache(leagueIds: number[], extraSeasons: number, r
       const found = await peekFixtures(`fx:${k}`, 365 * 24 * H);
       if (!found) return;
       add(found.pack);
+      if (i === 0) copies.set(k, found);
       const s = repo.seasonsLoaded.get(l) ?? new Set<number>();
       s.add(season);
       repo.seasonsLoaded.set(l, s);
       n++;
-      if (renewStale && i === 0 && !(await Cache.get(`fx:${k}`, CURRENT_TTL))) void loadSeason(l, season);
+      if (renewStale && i === 0 && seasonOutdated(found.pack, found.t)) void loadSeason(l, season);
     });
   }));
   if (n) historyDirty = true;
@@ -278,6 +311,6 @@ export function setMode(m: Mode) {
   repo.mode = m;
   repo.matches.clear(); repo.leagues.clear(); repo.teams.clear(); repo.odds = {};
   repo.seasonsLoaded.clear(); repo.currentSeason.clear(); repo.failed.clear(); repo.errors = [];
-  dayPromises.clear(); seasonPromises.clear(); oddsPromises.clear(); extraPromises.clear(); demoLoaded = null;
+  dayPromises.clear(); seasonPromises.clear(); copies.clear(); oddsPromises.clear(); extraPromises.clear(); demoLoaded = null;
   changed();
 }

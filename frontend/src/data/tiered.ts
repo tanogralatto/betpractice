@@ -33,17 +33,22 @@ export function unpackFixtures(s: string): FixturePack {
 
 export const usage = { local: 0, shared: 0, api: 0 };
 
-async function tiered<T>(key: string, ttl: number, fetcher: () => Promise<T>, enc: (v: T) => string, dec: (s: string) => T, force: boolean): Promise<T> {
+/** `stale(v, t)`: además del vencimiento, la copia se descarta si devuelve true (p. ej. hay partidos nuevos). */
+type Stale<T> = (v: T, t: number) => boolean;
+
+async function tiered<T>(key: string, ttl: number, fetcher: () => Promise<T>, enc: (v: T) => string, dec: (s: string) => T, force: boolean, stale?: Stale<T>): Promise<T> {
   if (!force) {
-    const local = await Cache.get<T>(key, ttl);
-    if (local) { usage.local++; return local; }
+    const local = await Cache.getWithTime<T>(key, ttl);
+    if (local && !stale?.(local.v, local.t)) { usage.local++; return local.v; }
     const remote = await sharedGet(key, ttl);
     if (remote) {
       try {
         const v = dec(remote.v);
-        await Cache.set(key, v, remote.t);
-        usage.shared++;
-        return v;
+        if (!stale?.(v, remote.t)) {
+          await Cache.set(key, v, remote.t);
+          usage.shared++;
+          return v;
+        }
       } catch { /* dato compartido dañado: se baja de nuevo */ }
     }
   }
@@ -55,8 +60,8 @@ async function tiered<T>(key: string, ttl: number, fetcher: () => Promise<T>, en
   return v;
 }
 
-export const tieredFixtures = (key: string, ttl: number, fetcher: () => Promise<FixturePack>, force = false) =>
-  tiered(key, ttl, fetcher, packFixtures, unpackFixtures, force);
+export const tieredFixtures = (key: string, ttl: number, fetcher: () => Promise<FixturePack>, force = false, stale?: Stale<FixturePack>) =>
+  tiered(key, ttl, fetcher, packFixtures, unpackFixtures, force, stale);
 export const tieredOdds = (key: string, ttl: number, fetcher: () => Promise<OddsMap>, force = false) =>
   tiered(key, ttl, fetcher, (o) => JSON.stringify(o), (s) => JSON.parse(s) as OddsMap, force);
 
@@ -76,8 +81,8 @@ export async function peekOdds(key: string, ttl: number): Promise<OddsMap | null
 
 /** Solo mira el dispositivo y la nube (sin gastar consultas). */
 export async function peekFixtures(key: string, ttl: number): Promise<{ pack: FixturePack; t: number } | null> {
-  const local = await Cache.get<FixturePack>(key, ttl);
-  if (local) return { pack: local, t: 0 };
+  const local = await Cache.getWithTime<FixturePack>(key, ttl);
+  if (local) return { pack: local.v, t: local.t };
   const remote = await sharedGet(key, ttl);
   if (!remote) return null;
   try {
