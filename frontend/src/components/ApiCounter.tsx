@@ -4,17 +4,35 @@ import { onApiCall, todayCalls } from "../data/usageReport";
 
 const fmt = (n: number) => n.toLocaleString("es-AR");
 
+// Consumo de hoy por app, que junta el worker de Fútbol Data Lab (solo números).
+const USAGE_URL = "https://replica-futbol-sync.tanogralatto.workers.dev/usage-today";
+type ByApp = { apps: Record<string, number>; names: Record<string, string> };
+async function byApp(): Promise<ByApp | null> {
+  try {
+    const r = await fetch(USAGE_URL);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j?.apps ? (j as ByApp) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Contador de consultas a API-Football del día (arriba, al lado de ↻ Actualizar).
  *  El total sale de /status, que no gasta consultas; betpractice se cuenta en este dispositivo. */
 export default function ApiCounter() {
   const [st, setSt] = useState<{ current: number; limit: number } | null>(null);
   const [mine, setMine] = useState(todayCalls());
   const [open, setOpen] = useState(false);
+  const [apps, setApps] = useState<ByApp | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
-    const load = () => AF.status().then((s) => setSt({ current: s.current, limit: s.limit })).catch(() => {});
+    const load = () => {
+      AF.status().then((s) => setSt({ current: s.current, limit: s.limit })).catch(() => {});
+      byApp().then((a) => a && setApps(a));
+    };
     load();
     const every = setInterval(load, 5 * 60_000);
     // después de consultas propias se refresca el total (agrupado, como mucho cada 20 s)
@@ -32,7 +50,13 @@ export default function ApiCounter() {
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const total = st ? Math.max(st.current, mine) : null;
+  // por app: lo que juntó Data Lab; BetPractice nunca menos que lo de este dispositivo (se reporta cada 5 min)
+  const counts: Record<string, number> = { ...(apps?.apps ?? {}) };
+  counts.betpractice = Math.max(counts.betpractice ?? 0, mine);
+  const order = ["betpractice", ...Object.keys(counts).filter((k) => k !== "betpractice")];
+  const rows: [string, number][] = order.map((k) => [k === "betpractice" ? "BetPractice" : apps?.names[k] ?? k, counts[k]]);
+  const known = rows.reduce((a, [, n]) => a + n, 0);
+  const total = st ? Math.max(st.current, known) : null;
   const pct = st && st.limit ? Math.min(100, (total! / st.limit) * 100) : 0;
   const level = pct >= 85 ? "bad" : pct >= 60 ? "warn" : "ok";
   // el cupo de API-Football se reinicia a las 00:00 UTC
@@ -49,8 +73,9 @@ export default function ApiCounter() {
         <div className="api-pop">
           <div className="api-row"><b>Consultas de hoy</b><b>{total === null ? "…" : fmt(total)}{st?.limit ? ` / ${fmt(st.limit)}` : ""}</b></div>
           {!!st?.limit && <div className="api-bar"><span className={level} style={{ width: `${pct}%` }} /><em>{Math.round(pct)}%</em></div>}
-          <div className="api-row"><span>betpractice <small className="muted">(este dispositivo)</small></span><b>{fmt(mine)}</b></div>
-          {total !== null && <div className="api-row"><span>Otras apps <small className="muted">(Escáner, Data Lab…)</small></span><b>{fmt(Math.max(0, total - mine))}</b></div>}
+          {rows.map(([name, n]) => <div key={name} className="api-row"><span>{name}</span><b>{fmt(n)}</b></div>)}
+          {total !== null && <div className="api-row"><span>Otras <small className="muted">(Escáner…)</small></span><b>{fmt(Math.max(0, total - known))}</b></div>}
+          {!apps && <div className="muted small">BetPractice: solo este dispositivo (no se pudo leer el detalle de las otras apps).</div>}
           <div className="muted small">Se reinicia en {resetTxt} · el total es el de tu clave</div>
         </div>
       )}
