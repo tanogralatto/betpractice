@@ -87,7 +87,7 @@ export default function Settings({ onClose, onChanged }: { onClose: () => void; 
       </div>
       <p className="muted small">
         Los partidos, historiales y cuotas que se bajan quedan guardados en el navegador para no gastar consultas:
-        las temporadas pasadas se bajan una sola vez; la actual se renueva apenas termina un partido de esa liga (o cada 24 horas) y las cuotas cada 30 minutos (o con ↻ Actualizar).
+        las temporadas pasadas se bajan una sola vez; la actual se renueva cada 3 horas y las cuotas cada 30 minutos (o con ↻ Actualizar).
       </p>
     </Modal>
   );

@@ -14,7 +14,7 @@ import { cloud, fetchTelegramAlerts, followInTelegram, unfollowInTelegram } from
 import { h2hGames, teamGames } from "../data/repo";
 import { warmFromCache } from "../data/repo";
 import { LS } from "../data/storage";
-import { dayMatches, ensureLeagues, ensureOdds, history, leagueReady, loadDay, onChange, refresh, renewOutdated, repo, setMode, warmOdds } from "../data/repo";
+import { dayMatches, ensureLeagues, ensureOdds, history, leagueReady, loadDay, onChange, refresh, repo, setMode, warmOdds } from "../data/repo";
 
 export interface Meta { generated_at: string; provider: string; today: string; leagues_synced?: string[] }
 
@@ -174,7 +174,6 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   if (!armed) await warmOdds(req.date, oddsLeagues);
   if (auto) {
     ensureLeagues(missing, extra);
-    renewOutdated(needed);
     ensureOdds(req.date, oddsLeagues);
   }
 

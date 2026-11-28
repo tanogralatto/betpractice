@@ -66,16 +66,6 @@ export const Cache = {
       return null;
     }
   },
-  /** Igual que get, pero devuelve también cuándo se bajó. */
-  async getWithTime<T>(k: string, maxAgeMs: number): Promise<{ v: T; t: number } | null> {
-    try {
-      const v = await tx<{ t: number; v: T }>("readonly", (st) => st.get(k));
-      if (!v || Date.now() - v.t > maxAgeMs) return null;
-      return v;
-    } catch {
-      return null;
-    }
-  },
   /** `t`: cuándo se bajó el dato (si vino de la nube compartida, su fecha original). */
   async set(k: string, v: unknown, t = Date.now()): Promise<void> {
     try { await tx("readwrite", (st) => st.put({ t, v }, k)); } catch { /* sin caché */ }
