@@ -55,7 +55,7 @@ docs/especificacion.md
   - temporadas por liga con `/fixtures?league&season`, que traen los goles al descanso;
   - cuotas con `/odds?date&league&season`.
 - Lo bajado se guarda en IndexedDB: las temporadas pasadas se bajan una vez; la actual se
-  renueva cada 24 h y las cuotas cada 30 min.
+  renueva apenas termina un partido de esa liga (como mucho cada 24 h) y las cuotas cada 30 min.
 - La clave se guarda en el navegador (`cr:key`). Si no hay, se usa la de la otra app del
   mismo sitio (`o05:key`).
 - Los partidos bajados por temporada no traen minutos de gol ni corners. Los mercados que los
@@ -71,7 +71,7 @@ Lo que cualquiera baja de API-Football (partidos del día, temporadas por liga, 
 equipos y H2H) queda en Firebase, en `cuotasreales_cache/{clave}` (formato compacto, un documento por
 día, liga-temporada o liga-día). Los demás lo leen de ahí y no gastan consultas. Orden de búsqueda:
 este dispositivo (IndexedDB) → nube compartida → API-Football. Vencimientos: día de hoy 10 min,
-cuotas 30 min, temporada en curso 24 h, temporadas pasadas 60 días.
+cuotas 30 min, temporada en curso hasta que termina un partido de la liga (tope 24 h), temporadas pasadas 60 días.
 
 Requiere estas reglas en el proyecto de Firebase `appuestasclaude` (pegarlas debajo de la función
 `tanoOwner()`); el texto exacto también aparece en ⚙ Ajustes para el dueño:
