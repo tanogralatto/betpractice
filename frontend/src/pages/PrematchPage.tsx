@@ -57,6 +57,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   const [presets, setPresets] = useState<Preset[]>([]);
   const [presetName, setPresetName] = useState("");
   const [presetSel, setPresetSel] = useState<number | "">("");
+  const [presetSaved, setPresetSaved] = useState<number | null>(null); // "✓ Guardado" hasta el próximo cambio
 
   // Al cambiar de perfil se cargan sus favoritos
   useEffect(() => {
@@ -87,10 +88,14 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
   // países elegidos: todos sus torneos están en la selección (se pueden elegir varios)
   const countryOn = (ids: number[]) => leagues.length > 0 && ids.every((id) => leagues.includes(id));
   const selectedCountries = data?.countries.filter((c) => countryOn(c.league_ids)) ?? [];
+  const countryPart = (ids: number[]) => !countryOn(ids) && ids.some((id) => leagues.includes(id));
+  const [openCountry, setOpenCountry] = useState<string | null>(null);
+  const toggleLeague = (id: number) => pickLeagues(leagues.includes(id) ? leagues.filter((x) => x !== id) : [...leagues, id]);
   const toggleCountry = (ids: number[]) =>
     pickLeagues(countryOn(ids) ? leagues.filter((id) => !ids.includes(id)) : [...new Set([...leagues, ...ids])]);
 
   const presetConfig = () => ({ leagues, markets, stats, streaks, bookmaker, hide_without_odds: hide, sort, filters });
+  useEffect(() => setPresetSaved(null), [leagues, markets, stats, streaks, bookmaker, hide, sort, filters, presetSel]);
   const loadPreset = (p: Preset) => {
     const c = p.config;
     pickLeagues(c.leagues ?? []); setMarkets(c.markets ?? []); setStats(c.stats ?? []); setStreaks(c.streaks ?? []);
@@ -137,12 +142,40 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
               .filter((c) => !countryQ || c.country.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .includes(countryQ.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")))
               .map((c) => (
-                <span key={c.country} className={`chip ${countryOn(c.league_ids) ? "on" : ""}`}
+                <span key={c.country} className={`chip ${countryOn(c.league_ids) ? "on" : countryPart(c.league_ids) ? "part" : ""}`}
                   onClick={() => toggleCountry(c.league_ids)} title="Tocá para sumar o quitar este país">
                   <Flag flag={c.flag} /> {c.country} <b>{c.count}</b>
+                  {(c.leagues?.length ?? 0) > 1 && (
+                    <button className="chip-more" title="Elegir ligas de este país"
+                      onClick={(e) => { e.stopPropagation(); setOpenCountry(openCountry === c.country ? null : c.country); }}>
+                      {openCountry === c.country ? "▴" : "▾"}
+                    </button>
+                  )}
                 </span>
               ))}
           </div>
+          {(() => {
+            const c = data.countries.find((x) => x.country === openCountry);
+            if (!c?.leagues) return null;
+            return (
+              <div className="country-leagues">
+                <div className="row">
+                  <b><Flag flag={c.flag} /> {c.country}</b>
+                  <span className="muted small">ligas que juegan este día</span>
+                  <button className="link" onClick={() => pickLeagues([...new Set([...leagues, ...c.league_ids])])}>Todas</button>
+                  <button className="link" onClick={() => pickLeagues(leagues.filter((id) => !c.league_ids.includes(id)))}>Ninguna</button>
+                  <button className="link" onClick={() => setOpenCountry(null)}>Cerrar</button>
+                </div>
+                <div className="country-leagues-list">
+                  {c.leagues.map((l) => (
+                    <label key={l.id}>
+                      <input type="checkbox" checked={leagues.includes(l.id)} onChange={() => toggleLeague(l.id)} /> {l.name} <span className="muted">({l.count})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -197,9 +230,20 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
               </select>
               <button disabled={presetSel === ""} onClick={() => { const p = presets.find((x) => x.id === presetSel); if (p) loadPreset(p); }}>Cargar</button>
               <button className="ghost" disabled={presetSel === ""} onClick={async () => {
-                await api.deletePreset(presetSel as number); setPresetSel(""); setPresets(await api.presets());
+                const p = presets.find((x) => x.id === presetSel);
+                if (!p || !confirm(`¿Borrar el preset «${p.name}»?`)) return;
+                await api.deletePreset(p.id); setPresetSel(""); setPresets(await api.presets());
               }}>🗑</button>
             </div>
+            {presetSel !== "" && (() => {
+              const p = presets.find((x) => x.id === presetSel);
+              return p && (
+                <button className="block" title="Guarda en este preset las ligas, mercados, filtros y orden que tenés ahora"
+                  onClick={async () => { await api.savePreset(p.name, presetConfig()); setPresets(await api.presets()); setPresetSaved(p.id); }}>
+                  {presetSaved === p.id ? "✓ Guardado" : `Guardar cambios en «${p.name}»`}
+                </button>
+              );
+            })()}
             <div className="row">
               <input placeholder="Nombre del preset" value={presetName} onChange={(e) => setPresetName(e.target.value)} />
               <button disabled={!presetName.trim()} onClick={async () => {

@@ -73,7 +73,7 @@ export interface PrematchResponse {
   total: number;
   total_leagues: number;
   favorites_count: number;
-  countries: { country: string; code: string | null; flag?: string | null; count: number; league_ids: number[] }[];
+  countries: { country: string; code: string | null; flag?: string | null; count: number; league_ids: number[]; leagues?: { id: number; name: string; count: number }[] }[];
   loading?: number;
   pending_leagues?: number;
   waiting?: boolean;
