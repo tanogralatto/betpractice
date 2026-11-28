@@ -122,8 +122,6 @@ export function dayMatches(day: string): MatchData[] {
 }
 
 // --- api: historial por liga y temporada -----------------------------------
-// temporada en curso: se renueva cada 24 h (o con ↻ Actualizar)
-const CURRENT_TTL = 24 * H;
 const seasonPromises = new Map<string, Promise<void>>();
 function loadSeason(league: number, season: number): Promise<void> {
   const k = `${league}:${season}`;
@@ -133,7 +131,7 @@ function loadSeason(league: number, season: number): Promise<void> {
     emit();
     try {
       const isCurrent = season >= (repo.currentSeason.get(league) ?? season);
-      const pack = await tieredFixtures(`fx:${k}`, isCurrent ? CURRENT_TTL : 60 * 24 * H, () => AF.fixturesBySeason(league, season));
+      const pack = await tieredFixtures(`fx:${k}`, isCurrent ? 3 * H : 60 * 24 * H, () => AF.fixturesBySeason(league, season));
       add(pack);
       const s = repo.seasonsLoaded.get(league) ?? new Set<number>();
       s.add(season);
@@ -171,7 +169,7 @@ export async function warmFromCache(leagueIds: number[], extraSeasons: number, r
       s.add(season);
       repo.seasonsLoaded.set(l, s);
       n++;
-      if (renewStale && i === 0 && !(await Cache.get(`fx:${k}`, CURRENT_TTL))) void loadSeason(l, season);
+      if (renewStale && i === 0 && !(await Cache.get(`fx:${k}`, 3 * H))) void loadSeason(l, season);
     });
   }));
   if (n) historyDirty = true;
