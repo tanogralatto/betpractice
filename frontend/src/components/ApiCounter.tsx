@@ -53,7 +53,8 @@ export default function ApiCounter() {
   // por app: lo que juntó Data Lab; BetPractice nunca menos que lo de este dispositivo (se reporta cada 5 min)
   const counts: Record<string, number> = { ...(apps?.apps ?? {}) };
   counts.betpractice = Math.max(counts.betpractice ?? 0, mine);
-  const order = ["betpractice", ...Object.keys(counts).filter((k) => k !== "betpractice")];
+  // BetPractice siempre; las demás apps solo si gastaron algo hoy
+  const order = ["betpractice", ...Object.keys(counts).filter((k) => k !== "betpractice" && counts[k] > 0)];
   const rows: [string, number][] = order.map((k) => [k === "betpractice" ? "BetPractice" : apps?.names[k] ?? k, counts[k]]);
   const known = rows.reduce((a, [, n]) => a + n, 0);
   const total = st ? Math.max(st.current, known) : null;
@@ -74,7 +75,7 @@ export default function ApiCounter() {
           <div className="api-row"><b>Consultas de hoy</b><b>{total === null ? "…" : fmt(total)}{st?.limit ? ` / ${fmt(st.limit)}` : ""}</b></div>
           {!!st?.limit && <div className="api-bar"><span className={level} style={{ width: `${pct}%` }} /><em>{Math.round(pct)}%</em></div>}
           {rows.map(([name, n]) => <div key={name} className="api-row"><span>{name}</span><b>{fmt(n)}</b></div>)}
-          {total !== null && <div className="api-row"><span>Otras <small className="muted">(Escáner…)</small></span><b>{fmt(Math.max(0, total - known))}</b></div>}
+          {total !== null && <div className="api-row"><span>Otras <small className="muted">(sin identificar)</small></span><b>{fmt(Math.max(0, total - known))}</b></div>}
           {!apps && <div className="muted small">BetPractice: solo este dispositivo (no se pudo leer el detalle de las otras apps).</div>}
           <div className="muted small">Se reinicia en {resetTxt} · el total es el de tu clave</div>
         </div>
