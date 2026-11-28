@@ -148,12 +148,13 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
   const streaks = (req.streaks ?? p.fav_streaks).slice(0, 3);
   const bookmaker = req.bookmaker || p.fav_bookmakers[0] || BEST;
   const all = dayMatches(req.date).filter((m) => m.status !== "CANC");
-  const countries = new Map<string, { country: string; code: string | null; flag: string | null; count: number; league_ids: Set<number> }>();
+  const countries = new Map<string, { country: string; code: string | null; flag: string | null; count: number; league_ids: Set<number>; per: Map<number, number> }>();
   for (const m of all) {
     const lg = repo.leagues.get(m.leagueId)!;
-    const c = countries.get(lg.country) ?? { country: lg.country, code: null, flag: lg.flag, count: 0, league_ids: new Set<number>() };
+    const c = countries.get(lg.country) ?? { country: lg.country, code: null, flag: lg.flag, count: 0, league_ids: new Set<number>(), per: new Map<number, number>() };
     c.count++;
     c.league_ids.add(lg.id);
+    c.per.set(lg.id, (c.per.get(lg.id) ?? 0) + 1);
     countries.set(lg.country, c);
   }
   const fav = new Set(p.fav_leagues);
@@ -187,7 +188,12 @@ async function prematch(req: PrematchRequest): Promise<PrematchResponse> {
     shown: rows.length, shown_leagues: new Set(rows.map((r) => r.league.id)).size,
     total: all.length, total_leagues: new Set(all.map((m) => m.leagueId)).size,
     favorites_count: all.filter((m) => !fav.size || fav.has(m.leagueId)).length,
-    countries: [...countries.values()].map((c) => ({ ...c, league_ids: [...c.league_ids].sort((a, b) => a - b) }))
+    countries: [...countries.values()].map(({ per, ...c }) => ({
+      ...c, league_ids: [...c.league_ids].sort((a, b) => a - b),
+      // ligas del país que juegan ese día, con cuántos partidos (para elegirlas desde la bandera)
+      leagues: [...per].map(([id, count]) => ({ id, name: repo.leagues.get(id)?.name ?? String(id), count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    }))
       .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country)),
     loading: repo.loading.size,
     pending_leagues: auto || !armed ? 0 : missing.length,
