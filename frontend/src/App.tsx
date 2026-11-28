@@ -1,3 +1,4 @@
+import ApiCounter from "./components/ApiCounter";
 import { useCallback, useEffect, useState } from "react";
 import Settings from "./components/Settings";
 import { api, Catalog, LeagueNode, Meta, UserProfile } from "./api";
@@ -69,6 +70,7 @@ export default function App() {
           </button>
           <button className={tab === "profile" ? "on" : ""} onClick={() => setTab("profile")}>Perfil</button>
         </nav>
+        {meta?.provider === "api_football" && <ApiCounter />}
         <div className="muted small">
           {active && <>Perfil activo: <b>{active.name}</b></>}
           {meta && (
