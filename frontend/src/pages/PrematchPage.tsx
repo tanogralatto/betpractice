@@ -6,6 +6,7 @@ import MarketPicker from "../components/MarketPicker";
 import { SampleModal, TeamMatchesModal } from "../components/MatchModals";
 import MatchList from "../components/MatchList";
 import Flag from "../components/Flag";
+import ApiCounter from "../components/ApiCounter";
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const shift = (d: string, n: number) => {
@@ -111,6 +112,7 @@ export default function PrematchPage({ catalog, leagues: tree, profiles, openSet
             {refreshing ? "Actualizando…" : "↻ Actualizar"}
           </button>
         )}
+        {data?.mode === "api" && <ApiCounter />}
         <div className="chips">
           <span className={`chip ${!leagues.length ? "on" : ""}`} onClick={() => setLeagues([])}
             title="Ver todos los partidos del día (no baja datos: elegí países para calcular)">Todos <b>{data?.total ?? 0}</b></span>
